@@ -36,16 +36,25 @@ export { where, orderBy, limit };
 // ─── Collection paths ───────────────────────────────────────────────────────
 
 export const COLLECTIONS = {
-  societies:    'societies',
-  users:        'users',
-  memberships:  (societyId: string) => `societies/${societyId}/memberships`,
-  accounts:     (societyId: string) => `societies/${societyId}/accounts`,
-  fundHeads:    (societyId: string) => `societies/${societyId}/fundHeads`,
-  vendors:      (societyId: string) => `societies/${societyId}/vendors`,
-  requests:     (societyId: string) => `societies/${societyId}/requests`,
-  transactions: (societyId: string) => `societies/${societyId}/transactions`,
-  balances:     (societyId: string) => `societies/${societyId}/balances`,
-  auditLogs:    (societyId: string) => `societies/${societyId}/auditLogs`,
+  societies:        'societies',
+  users:            'users',
+  // Top-level memberships: id = uid_societyId; supports multi-society per user queries
+  memberships:      'memberships',
+  accounts:         (societyId: string) => `societies/${societyId}/accounts`,
+  fundHeads:        (societyId: string) => `societies/${societyId}/fundHeads`,
+  vendors:          (societyId: string) => `societies/${societyId}/vendors`,
+  vendorRelations:  (societyId: string) => `societies/${societyId}/vendorRelations`,
+  recurringPayments:  (societyId: string) => `societies/${societyId}/recurringPayments`,
+  recurringInstances: (societyId: string) => `societies/${societyId}/recurringInstances`,
+  expenseRequests:    (societyId: string) => `societies/${societyId}/expenseRequests`,
+  quotations:  (societyId: string, requestId: string) => `societies/${societyId}/expenseRequests/${requestId}/quotations`,
+  approvals:   (societyId: string, requestId: string) => `societies/${societyId}/expenseRequests/${requestId}/approvals`,
+  requestNotes:(societyId: string, requestId: string) => `societies/${societyId}/expenseRequests/${requestId}/notes`,
+  disbursements:(societyId: string, requestId: string) => `societies/${societyId}/expenseRequests/${requestId}/disbursements`,
+  transactions:     (societyId: string) => `societies/${societyId}/transactions`,
+  balances:         (societyId: string) => `societies/${societyId}/balances`,
+  notifications:    (societyId: string) => `societies/${societyId}/notifications`,
+  auditLogs:        (societyId: string) => `societies/${societyId}/auditLogs`,
 } as const;
 
 // ─── Generic helpers (always society-scoped) ─────────────────────────────────
@@ -80,6 +89,27 @@ export function societyQuery<T extends DocumentData>(
 ): Query<T> {
   const colRef = societyCollection(societyId, path, converter);
   return query(colRef, ...constraints);
+}
+
+// ─── Top-level collection helpers ────────────────────────────────────────────
+
+/** Typed ref for a top-level (non-society-scoped) collection. */
+export function topCollection<T extends DocumentData>(
+  path: string,
+  converter?: FirestoreDataConverter<T>,
+): CollectionReference<T> {
+  const ref = collection(db, path);
+  return converter ? ref.withConverter(converter) : (ref as CollectionReference<T>);
+}
+
+/** Typed doc ref for a top-level collection. */
+export function topDoc<T extends DocumentData>(
+  path: string,
+  docId: string,
+  converter?: FirestoreDataConverter<T>,
+): DocumentReference<T> {
+  const ref = doc(db, path, docId);
+  return converter ? ref.withConverter(converter) : (ref as DocumentReference<T>);
 }
 
 // ─── CRUD helpers ─────────────────────────────────────────────────────────────

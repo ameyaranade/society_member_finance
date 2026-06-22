@@ -8,6 +8,7 @@ dist-ssr/
 # env / secrets
 .env.local
 .env*.local
+service-account.json
 
 # firebase
 .firebase/

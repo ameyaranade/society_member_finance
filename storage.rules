@@ -1,8 +1,83 @@
 rules_version = '2';
 
-// Default-deny baseline (society-scoped paths added with the document features).
 service firebase.storage {
   match /b/{bucket}/o {
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Caller's active society claim matches the path segment
+    function isMember(societyId) {
+      return isSignedIn() && request.auth.token.societyId == societyId;
+    }
+
+    function isAdminOrFM(societyId) {
+      return isMember(societyId) &&
+        (request.auth.token.role == 'admin' || request.auth.token.role == 'fm');
+    }
+
+    // Uploaded file must be a PDF, image, or Excel; max 10 MB
+    function isAllowedFile() {
+      return request.resource.size < 10 * 1024 * 1024 &&
+        request.resource.contentType.matches('application/pdf') ||
+        request.resource.contentType.matches('image/.*') ||
+        request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') ||
+        request.resource.contentType.matches('application/vnd.ms-excel');
+    }
+
+    // ── Society-scoped paths ─────────────────────────────────────────────────
+
+    match /societies/{societyId}/{allPaths=**} {
+      // Default deny within a society — specific rules below override
+      allow read, write: if false;
+    }
+
+    // Expense request quotation documents (FM/Admin upload; all members read)
+    match /societies/{societyId}/expense-requests/{requestId}/quotations/{quoteId}/{fileName} {
+      allow read:  if isMember(societyId);
+      allow create: if isAdminOrFM(societyId) && isAllowedFile();
+      allow update, delete: if false;
+    }
+
+    // Expense request disbursement evidence (FM/Admin upload; all members read)
+    match /societies/{societyId}/expense-requests/{requestId}/disbursements/{disbId}/{fileName} {
+      allow read:  if isMember(societyId);
+      allow create: if isAdminOrFM(societyId) && isAllowedFile();
+      allow update, delete: if false;
+    }
+
+    // Recurring payment invoices (FM/Admin upload; all members read)
+    match /societies/{societyId}/recurring/{instanceId}/{fileName} {
+      allow read:  if isMember(societyId);
+      allow create: if isAdminOrFM(societyId) && isAllowedFile();
+      allow update, delete: if false;
+    }
+
+    // Payment proofs (FM/Admin upload; all members read)
+    match /societies/{societyId}/payment-proofs/{txnId}/{fileName} {
+      allow read:  if isMember(societyId);
+      allow create: if isAdminOrFM(societyId) && isAllowedFile();
+      allow update, delete: if false;
+    }
+
+    // Collection import files (Admin upload only)
+    match /societies/{societyId}/imports/{uploadId}/{fileName} {
+      allow read:  if isMember(societyId) &&
+        (request.auth.token.role == 'admin' || request.auth.token.role == 'fm');
+      allow create: if isMember(societyId) && request.auth.token.role == 'admin' && isAllowedFile();
+      allow update, delete: if false;
+    }
+
+    // Generated reports (Admin/FM generate; all members read)
+    match /societies/{societyId}/exports/{reportId}/{fileName} {
+      allow read:  if isMember(societyId);
+      allow write: if false;  // Functions-only (generateReport callable)
+    }
+
+    // Default deny everything else
     match /{allPaths=**} {
       allow read, write: if false;
     }

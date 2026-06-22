@@ -24,16 +24,16 @@ const SOCIETY = 'society_abc';
 
 describe('societyCollection', () => {
   it('scopes path to societyId', () => {
-    const ref = societyCollection(SOCIETY, COLLECTIONS.requests);
-    expect((ref as unknown as { _path: string })._path).toBe(`societies/${SOCIETY}/requests`);
+    const ref = societyCollection(SOCIETY, COLLECTIONS.expenseRequests);
+    expect((ref as unknown as { _path: string })._path).toBe(`societies/${SOCIETY}/expenseRequests`);
   });
 });
 
 describe('societyDoc', () => {
   it('scopes doc path to societyId', () => {
-    const ref = societyDoc(SOCIETY, COLLECTIONS.requests, 'req_1');
+    const ref = societyDoc(SOCIETY, COLLECTIONS.expenseRequests, 'req_1');
     expect((ref as unknown as { _path: string })._path).toBe(
-      `societies/${SOCIETY}/requests/req_1`,
+      `societies/${SOCIETY}/expenseRequests/req_1`,
     );
   });
 });
@@ -42,15 +42,15 @@ describe('societyQuery', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('builds a query on the society-scoped collection', () => {
-    const q = societyQuery(SOCIETY, COLLECTIONS.requests);
+    const q = societyQuery(SOCIETY, COLLECTIONS.expenseRequests);
     const inner = q as unknown as { _ref: { _path: string } };
-    expect(inner._ref._path).toBe(`societies/${SOCIETY}/requests`);
+    expect(inner._ref._path).toBe(`societies/${SOCIETY}/expenseRequests`);
   });
 
   it('includes provided constraints', () => {
     // where is already vi.fn() from the top-level mock — call it directly
     const constraint = where('status', '==', 'requested');
-    const q = societyQuery(SOCIETY, COLLECTIONS.requests, [constraint]);
+    const q = societyQuery(SOCIETY, COLLECTIONS.expenseRequests, [constraint]);
     const inner = q as unknown as { _constraints: unknown[] };
     expect(inner._constraints).toHaveLength(1);
   });

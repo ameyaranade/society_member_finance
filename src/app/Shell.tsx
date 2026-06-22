@@ -12,6 +12,8 @@ import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import Box from '@mui/material/Box';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -20,10 +22,14 @@ import PaymentsIcon from '@mui/icons-material/Payments';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import PeopleIcon from '@mui/icons-material/People';
 import SettingsIcon from '@mui/icons-material/Settings';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import { signOut } from 'firebase/auth';
 import { useThemeMode } from '../theme/useThemeMode';
+import { useAuth } from '../features/auth/useAuth';
+import { auth } from '../lib/firebase';
 
 const NAV_WIDTH = 220;
 
@@ -35,12 +41,18 @@ const NAV_ITEMS = [
   { label: 'Settings',    path: '/settings',    icon: <SettingsIcon /> },
 ];
 
-function NavItems({ onClose }: { onClose?: () => void }) {
+function NavItems({ onClose, isSuperAdmin, role }: { onClose?: () => void; isSuperAdmin?: boolean; role?: string | null }) {
   const location = useLocation();
+  const items = [
+    ...NAV_ITEMS.filter(item => item.path !== '/members' || role === 'admin'),
+    ...(isSuperAdmin
+      ? [{ label: 'Platform Admin', path: '/super-admin', icon: <AdminPanelSettingsIcon /> }]
+      : []),
+  ];
 
   return (
     <List disablePadding>
-      {NAV_ITEMS.map(({ label, path, icon }) => {
+      {items.map(({ label, path, icon }) => {
         const active = path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
         return (
           <ListItem key={path} disablePadding>
@@ -64,12 +76,14 @@ function NavItems({ onClose }: { onClose?: () => void }) {
 export default function Shell() {
   const theme = useTheme();
   const { mode, toggleMode } = useThemeMode();
+  const { user, isSuperAdmin, role } = useAuth();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
 
   const drawerContent = (
     <Box sx={{ pt: 1, pb: 2 }}>
-      <NavItems onClose={() => setMobileOpen(false)} />
+      <NavItems onClose={() => setMobileOpen(false)} isSuperAdmin={isSuperAdmin} role={role} />
     </Box>
   );
 
@@ -101,9 +115,29 @@ export default function Shell() {
               {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
             </IconButton>
           </Tooltip>
-          <IconButton color="inherit" aria-label="User menu">
-            <AccountCircleIcon />
-          </IconButton>
+          <Tooltip title={user?.email ?? 'Account'}>
+            <IconButton
+              color="inherit"
+              aria-label="User menu"
+              onClick={e => setUserMenuAnchor(e.currentTarget)}
+            >
+              <AccountCircleIcon />
+            </IconButton>
+          </Tooltip>
+          <Menu
+            anchorEl={userMenuAnchor}
+            open={Boolean(userMenuAnchor)}
+            onClose={() => setUserMenuAnchor(null)}
+          >
+            <MenuItem disabled sx={{ fontSize: '0.8125rem' }}>
+              {user?.email}
+            </MenuItem>
+            <MenuItem
+              onClick={() => { setUserMenuAnchor(null); signOut(auth); }}
+            >
+              Sign out
+            </MenuItem>
+          </Menu>
         </Toolbar>
       </AppBar>
 

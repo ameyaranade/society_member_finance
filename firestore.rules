@@ -13,7 +13,7 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.superAdmin == true;
     }
 
-    // Caller belongs to this society (claim matches path segment)
+    // Caller belongs to this society (active claim matches path segment)
     function isMember(societyId) {
       return isSignedIn() && request.auth.token.societyId == societyId;
     }
@@ -23,24 +23,33 @@ service cloud.firestore {
       return isMember(societyId) && request.auth.token.role == role;
     }
 
-    // Caller is admin or MC in this society
-    function isAdminOrMC(societyId) {
-      return isMember(societyId) &&
-        (request.auth.token.role == 'admin' || request.auth.token.role == 'mc');
-    }
-
     // Caller is admin or FM in this society
     function isAdminOrFM(societyId) {
       return isMember(societyId) &&
         (request.auth.token.role == 'admin' || request.auth.token.role == 'fm');
     }
 
-    // ── Forbidden client writes (Functions-only collections) ──────────────────
-    // transactions, balances, auditLogs are written exclusively by Cloud Functions.
+    // ── Top-level: Memberships ────────────────────────────────────────────────
+    // id = uid_societyId; written by Functions only (inviteUser, refreshClaims)
+    match /memberships/{membershipId} {
+      allow read: if isSignedIn() && (
+        resource.data.uid == request.auth.uid ||
+        isSuperAdmin() ||
+        (request.auth.token.societyId == resource.data.societyId
+         && request.auth.token.role == 'admin')
+      );
+      // Writes are Functions-only (inviteUser, refreshClaims, updateMembership callables)
+      allow write: if false;
+    }
 
-    // ── Top-level collections ─────────────────────────────────────────────────
+    // ── Top-level: Users (global profile) ────────────────────────────────────
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+      allow read: if isSuperAdmin();
+    }
 
-    // Societies — super admin can create; members can read their own
+    // ── Top-level: Societies ──────────────────────────────────────────────────
+    // Super admin creates; members read their own society
     match /societies/{societyId} {
       allow read:   if isSuperAdmin() || isMember(societyId);
       allow create: if isSuperAdmin();
@@ -48,12 +57,6 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
 
       // ── Society sub-collections ─────────────────────────────────────────────
-
-      // Memberships — admin manages; members read own
-      match /memberships/{memberId} {
-        allow read:   if isMember(societyId);
-        allow write:  if isSuperAdmin() || hasRole(societyId, 'admin');
-      }
 
       // Accounts — admin manages; FM reads
       match /accounts/{accountId} {
@@ -67,19 +70,60 @@ service cloud.firestore {
         allow write:  if hasRole(societyId, 'admin');
       }
 
-      // Vendors — admin + FM manage; MC reads
+      // Vendors — admin + FM manage; all members read
       match /vendors/{vendorId} {
         allow read:   if isMember(societyId);
         allow write:  if isAdminOrFM(societyId);
       }
 
-      // Expense requests — FM creates/withdraws; MC + Admin reads/approves
-      match /requests/{requestId} {
+      // Vendor relations — income/expense edge on a vendor
+      match /vendorRelations/{relId} {
         allow read:   if isMember(societyId);
-        allow create: if isAdminOrFM(societyId);
-        // Updates (approve, withdraw) handled by Functions; direct writes blocked except status-safe fields
-        allow update: if isAdminOrFM(societyId);
-        allow delete: if false;
+        allow write:  if isAdminOrFM(societyId);
+      }
+
+      // Recurring payment templates — admin manages; all members read
+      match /recurringPayments/{rpId} {
+        allow read:  if isMember(societyId);
+        allow write: if hasRole(societyId, 'admin');
+      }
+
+      // Recurring instances — Functions-only writes; members read
+      match /recurringInstances/{instanceId} {
+        allow read:  if isMember(societyId);
+        allow write: if false;
+      }
+
+      // Expense requests — all writes via Functions (callables); members read
+      match /expenseRequests/{requestId} {
+        allow read:   if isMember(societyId);
+        allow write:  if false;  // createMaintenanceRequest / scheduleSnag / submitExpenseRequest / etc.
+
+        // Quotations — FM/Admin upload metadata; all members read
+        match /quotations/{quoteId} {
+          allow read:             if isMember(societyId);
+          allow create:           if isAdminOrFM(societyId);
+          allow update, delete:   if false;
+        }
+
+        // Approvals — recordApproval callable only
+        match /approvals/{approvalId} {
+          allow read:  if isMember(societyId);
+          allow write: if false;
+        }
+
+        // Notes — any member can add (UI restricts to MC); immutable once written
+        match /notes/{noteId} {
+          allow read:           if isMember(societyId);
+          allow create:         if isMember(societyId);
+          allow update, delete: if false;
+        }
+
+        // Disbursements — recordDisbursement callable only
+        match /disbursements/{disbId} {
+          allow read:  if isMember(societyId);
+          allow write: if false;
+        }
       }
 
       // Transactions — Functions-only writes; members read
@@ -105,12 +149,6 @@ service cloud.firestore {
         allow read:  if isMember(societyId);
         allow write: if hasRole(societyId, 'admin');
       }
-    }
-
-    // Users — own profile only
-    match /users/{userId} {
-      allow read, write: if isSignedIn() && request.auth.uid == userId;
-      allow read: if isSuperAdmin();
     }
 
     // Default deny — everything else

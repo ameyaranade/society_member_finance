@@ -33,7 +33,18 @@
     "password": "Password",
     "forgotPassword": "Forgot password?",
     "resetPassword": "Reset password",
-    "resetEmailSent": "Reset email sent"
+    "resetEmailSent": "Reset email sent. Check your inbox.",
+    "createAccount": "Create account"
+  },
+  "members": {
+    "title": "Members",
+    "invite": "Invite member",
+    "inviteEmail": "Email address",
+    "inviteRole": "Role",
+    "sendInvite": "Send invite",
+    "deactivate": "Deactivate",
+    "reactivate": "Reactivate",
+    "noMembers": "No members yet."
   },
   "society": {
     "name": "Society",
