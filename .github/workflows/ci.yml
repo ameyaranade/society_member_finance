@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Install functions dependencies
+        run: npm ci
+        working-directory: functions
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck (web)
+        run: npm run typecheck
+
+      - name: Typecheck (functions)
+        run: npm run typecheck
+        working-directory: functions
+
+      - name: Test (web)
+        run: npm test
+
+      - name: Test (functions)
+        run: npm test
+        working-directory: functions
+
+      - name: Build
+        run: npm run build
