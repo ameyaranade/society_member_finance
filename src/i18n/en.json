@@ -1,0 +1,75 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "back": "Back",
+    "next": "Next",
+    "loading": "Loading…",
+    "error": "Something went wrong",
+    "empty": "No data",
+    "search": "Search",
+    "filter": "Filter",
+    "export": "Export CSV",
+    "unsavedChanges": "You have unsaved changes",
+    "saveChanges": "Save changes",
+    "discardChanges": "Discard"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "payables": "Payables",
+    "receivables": "Receivables",
+    "settings": "Settings",
+    "members": "Members"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "signInWithGoogle": "Sign in with Google",
+    "email": "Email address",
+    "password": "Password",
+    "forgotPassword": "Forgot password?",
+    "resetPassword": "Reset password",
+    "resetEmailSent": "Reset email sent"
+  },
+  "society": {
+    "name": "Society",
+    "switchSociety": "Switch society",
+    "members": "Members",
+    "settings": "Society settings"
+  },
+  "payables": {
+    "title": "Payables",
+    "newRequest": "New request",
+    "expenseRequest": "Expense request",
+    "vendor": "Vendor",
+    "amount": "Amount",
+    "description": "Description",
+    "category": "Category",
+    "status": {
+      "scheduled": "Scheduled",
+      "requested": "Requested",
+      "approved": "Approved",
+      "disbursed": "Disbursed",
+      "completed": "Completed",
+      "withdrawn": "Withdrawn"
+    },
+    "actions": {
+      "approve": "Approve",
+      "withdraw": "Withdraw",
+      "disburse": "Record disbursement",
+      "complete": "Mark complete",
+      "addQuote": "Add quotation"
+    }
+  },
+  "errors": {
+    "required": "This field is required",
+    "invalidAmount": "Enter a valid amount",
+    "permissionDenied": "You don't have permission for this action",
+    "notFound": "Record not found",
+    "serverError": "Server error — please try again"
+  }
+}

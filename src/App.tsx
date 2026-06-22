@@ -1,30 +1,8 @@
-import { Box, Button, Container, IconButton, Stack, Tooltip, Typography } from '@mui/material';
-import DarkModeIcon from '@mui/icons-material/DarkMode';
-import LightModeIcon from '@mui/icons-material/LightMode';
-import { firebaseReady } from './lib/firebase';
-import { useThemeMode } from './theme/useThemeMode';
+// App.tsx is the legacy entry point — routing now lives in src/app/routes.tsx.
+// This file is kept only for tests that render the app in isolation.
+import { RouterProvider } from 'react-router-dom';
+import { router } from './app/routes';
 
 export default function App() {
-  const { mode, toggleMode } = useThemeMode();
-
-  return (
-    <Container maxWidth="sm">
-      <Stack spacing={2} sx={{ py: 8 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="h4">Society Finance</Typography>
-          <Tooltip title={`Switch to ${mode === 'light' ? 'dark' : 'light'} mode`}>
-            <IconButton onClick={toggleMode} color="inherit">
-              {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
-            </IconButton>
-          </Tooltip>
-        </Box>
-        <Typography color="text.secondary">
-          Scaffold online. Project: {firebaseReady.projectId}.
-        </Typography>
-        <Box>
-          <Button variant="contained">Primary action</Button>
-        </Box>
-      </Stack>
-    </Container>
-  );
+  return <RouterProvider router={router} />;
 }
