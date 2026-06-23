@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
@@ -29,8 +30,11 @@ import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import HorizontalRuleIcon from '@mui/icons-material/HorizontalRule';
 import PaidIcon from '@mui/icons-material/Paid';
 import AddIcon from '@mui/icons-material/Add';
+import StickyNote2Icon from '@mui/icons-material/StickyNote2';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import { useRecurringInstances, useProjectedInstances } from './useRecurringInstances';
 import { useExpenseRequests } from './useExpenseRequests';
+import { useRequestedQueue } from './useRequestedQueue';
 import { useAccounts } from '../settings/useAccounts';
 import { useAuth } from '../auth/useAuth';
 import { formatMoney } from '../../lib/money';
@@ -42,8 +46,13 @@ import type { ExpenseRequest, ExpenseRequestStatus } from '../../types/requests'
 import MaintenanceCreateDrawer from './MaintenanceCreateDrawer';
 import SnagScheduleDrawer from './SnagScheduleDrawer';
 import SnagTakeUpDrawer from './SnagTakeUpDrawer';
+import RequestNotesDialog from './RequestNotesDialog';
+import DisbursementDialog from './DisbursementDialog';
+import RequestDetailDrawer from './RequestDetailDrawer';
 
-const withdrawFn = httpsCallable<{ requestId: string }, { ok: true }>(functions, 'withdrawExpenseRequest');
+const withdrawFn   = httpsCallable<{ requestId: string }, { ok: true }>(functions, 'withdrawExpenseRequest');
+const approveFn    = httpsCallable<{ requestId: string; note?: string }, { ok: true; approved: boolean }>(functions, 'recordApproval');
+const closeFn      = httpsCallable<{ requestId: string; closingNote?: string }, { ok: true }>(functions, 'closeExpenseRequest');
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -85,6 +94,10 @@ function todayISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function tsMillis(ts: unknown): number {
+  return (ts as { toMillis?: () => number })?.toMillis?.() ?? 0;
+}
+
 // ─── Recurring: Status chip ───────────────────────────────────────────────────
 
 const RECURRING_STATUS_CONFIG: Record<
@@ -106,19 +119,19 @@ function RecurringStatusChip({ status }: { status: RecurringInstanceStatus | 'pr
   );
 }
 
-// ─── Maintenance: Status chip ─────────────────────────────────────────────────
+// ─── Expense-request status chip ─────────────────────────────────────────────
 
-const MAINTENANCE_STATUS: Record<ExpenseRequestStatus, { label: string; color: 'default' | 'info' | 'warning' | 'success' | 'error' }> = {
-  scheduled: { label: 'Scheduled', color: 'default' },
-  requested: { label: 'Pending approval', color: 'warning' },
-  approved:  { label: 'Approved',  color: 'info' },
-  disbursed: { label: 'Disbursed', color: 'info' },
-  completed: { label: 'Completed', color: 'success' },
-  withdrawn: { label: 'Withdrawn', color: 'error' },
+const REQ_STATUS: Record<ExpenseRequestStatus, { label: string; color: 'default' | 'info' | 'warning' | 'success' | 'error' }> = {
+  scheduled: { label: 'Scheduled',        color: 'default'  },
+  requested: { label: 'Pending approval', color: 'warning'  },
+  approved:  { label: 'Approved',         color: 'info'     },
+  disbursed: { label: 'Disbursed',        color: 'info'     },
+  completed: { label: 'Completed',        color: 'success'  },
+  withdrawn: { label: 'Withdrawn',        color: 'error'    },
 };
 
-function MaintenanceStatusChip({ status }: { status: ExpenseRequestStatus }) {
-  const cfg = MAINTENANCE_STATUS[status] ?? { label: status, color: 'default' };
+function RequestStatusChip({ status }: { status: ExpenseRequestStatus }) {
+  const cfg = REQ_STATUS[status] ?? { label: status, color: 'default' };
   return <Chip label={cfg.label} color={cfg.color} size="small" />;
 }
 
@@ -315,15 +328,68 @@ function RecurringMonthView({ period, isFuture, canPay }: {
 
 // ─── Maintenance list view ────────────────────────────────────────────────────
 
-function MaintenanceView({ canCreate }: { canCreate: boolean }) {
-  const { requests, loading } = useExpenseRequests('maintenance');
-  const [drawerOpen,  setDrawerOpen]  = useState(false);
-  const [successMsg,  setSuccessMsg]  = useState('');
+const MAINT_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: 'all',       label: 'All statuses'     },
+  { value: 'requested', label: 'Pending approval' },
+  { value: 'approved',  label: 'Approved'         },
+  { value: 'disbursed', label: 'Disbursed'        },
+  { value: 'completed', label: 'Completed'        },
+  { value: 'withdrawn', label: 'Withdrawn'        },
+];
 
-  function handleCreated(_requestId: string) {
+function MaintenanceView({
+  canCreate, isFM, onRowClick,
+}: {
+  canCreate: boolean;
+  isFM: boolean;
+  onRowClick: (r: ExpenseRequest) => void;
+}) {
+  const { requests, loading } = useExpenseRequests('maintenance');
+  const [drawerOpen,   setDrawerOpen]   = useState(false);
+  const [disbTarget,   setDisbTarget]   = useState<ExpenseRequest | null>(null);
+  const [closeTarget,  setCloseTarget]  = useState<ExpenseRequest | null>(null);
+  const [closing,      setClosing]      = useState(false);
+  const [closeError,   setCloseError]   = useState('');
+  const [successMsg,   setSuccessMsg]   = useState('');
+
+  // Filters (S3.26)
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [dateFrom,     setDateFrom]     = useState('');
+  const [dateTo,       setDateTo]       = useState('');
+  const filtersActive = statusFilter !== 'all' || !!dateFrom || !!dateTo;
+
+  function clearFilters() { setStatusFilter('all'); setDateFrom(''); setDateTo(''); }
+
+  const filtered = requests.filter(r => {
+    if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+    if (dateFrom || dateTo) {
+      const ms = tsMillis(r.createdAt);
+      if (dateFrom && ms < new Date(dateFrom).getTime()) return false;
+      if (dateTo   && ms > new Date(dateTo + 'T23:59:59').getTime()) return false;
+    }
+    return true;
+  });
+
+  function handleCreated() {
     setDrawerOpen(false);
     setSuccessMsg('Maintenance request submitted successfully.');
     setTimeout(() => setSuccessMsg(''), 4000);
+  }
+
+  async function confirmClose() {
+    if (!closeTarget) return;
+    setClosing(true); setCloseError('');
+    try {
+      await closeFn({ requestId: closeTarget.id });
+      setSuccessMsg(`"${closeTarget.title}" marked as completed.`);
+      setTimeout(() => setSuccessMsg(''), 5000);
+      setCloseTarget(null);
+    } catch (e: unknown) {
+      setCloseError(e instanceof Error ? e.message : 'Close failed.');
+      setCloseTarget(null);
+    } finally {
+      setClosing(false);
+    }
   }
 
   if (loading) return <CircularProgress size={24} sx={{ m: 2 }} />;
@@ -340,11 +406,45 @@ function MaintenanceView({ canCreate }: { canCreate: boolean }) {
         )}
       </Stack>
 
-      {successMsg && <Alert severity="success" sx={{ mb: 2 }}>{successMsg}</Alert>}
+      {/* Filter bar */}
+      <Stack direction="row" spacing={1.5} alignItems="center" mb={2} flexWrap="wrap">
+        <FilterListIcon fontSize="small" color="action" />
+        <TextField
+          select size="small" label="Status" sx={{ minWidth: 170 }}
+          value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+        >
+          {MAINT_STATUS_OPTIONS.map(o => (
+            <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          type="date" size="small" label="Created from"
+          InputLabelProps={{ shrink: true }} sx={{ minWidth: 150 }}
+          value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+        />
+        <TextField
+          type="date" size="small" label="Created to"
+          InputLabelProps={{ shrink: true }} sx={{ minWidth: 150 }}
+          value={dateTo} onChange={e => setDateTo(e.target.value)}
+        />
+        {filtersActive && (
+          <Button size="small" onClick={clearFilters}>Clear</Button>
+        )}
+        {filtersActive && (
+          <Typography variant="caption" color="text.secondary">
+            {filtered.length} of {requests.length}
+          </Typography>
+        )}
+      </Stack>
 
-      {requests.length === 0 ? (
+      {successMsg  && <Alert severity="success" sx={{ mb: 2 }}>{successMsg}</Alert>}
+      {closeError  && <Alert severity="error"   sx={{ mb: 2 }}>{closeError}</Alert>}
+
+      {filtered.length === 0 ? (
         <Alert severity="info">
-          No maintenance requests yet.{canCreate ? ' Use "New request" to create one.' : ''}
+          {requests.length === 0
+            ? `No maintenance requests yet.${canCreate ? ' Use "New request" to create one.' : ''}`
+            : 'No requests match the current filters.'}
         </Alert>
       ) : (
         <Paper variant="outlined">
@@ -356,11 +456,16 @@ function MaintenanceView({ canCreate }: { canCreate: boolean }) {
                 <TableCell align="right">Est. cost</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Created</TableCell>
+                {isFM && <TableCell width={120} />}
               </TableRow>
             </TableHead>
             <TableBody>
-              {requests.map(r => (
-                <TableRow key={r.id} hover>
+              {filtered.map(r => (
+                <TableRow
+                  key={r.id} hover
+                  sx={{ cursor: 'pointer' }}
+                  onClick={() => onRowClick(r)}
+                >
                   <TableCell>
                     <Typography variant="body2" fontWeight={500}>{r.title}</Typography>
                     {r.location && (
@@ -369,14 +474,60 @@ function MaintenanceView({ canCreate }: { canCreate: boolean }) {
                   </TableCell>
                   <TableCell sx={{ textTransform: 'capitalize' }}>{r.category}</TableCell>
                   <TableCell align="right">{formatMoney(r.estCostPaise)}</TableCell>
-                  <TableCell><MaintenanceStatusChip status={r.status} /></TableCell>
+                  <TableCell><RequestStatusChip status={r.status} /></TableCell>
                   <TableCell>{formatDate(r.createdAt)}</TableCell>
+                  {isFM && (
+                    <TableCell onClick={e => e.stopPropagation()}>
+                      <Stack direction="row" spacing={1}>
+                        {(r.status === 'approved' || r.status === 'disbursed') && (
+                          <Button size="small" variant="outlined" color="primary"
+                            onClick={() => setDisbTarget(r)}>
+                            Disburse
+                          </Button>
+                        )}
+                        {r.status === 'disbursed' && (
+                          <Button size="small" variant="outlined" color="success"
+                            onClick={() => setCloseTarget(r)}>
+                            Close
+                          </Button>
+                        )}
+                      </Stack>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </Paper>
       )}
+
+      {disbTarget && (
+        <DisbursementDialog
+          request={disbTarget}
+          onClose={() => setDisbTarget(null)}
+          onDisbursed={() => {
+            setDisbTarget(null);
+            setSuccessMsg(`Disbursement recorded for "${disbTarget.title}".`);
+            setTimeout(() => setSuccessMsg(''), 5000);
+          }}
+        />
+      )}
+
+      <Dialog open={!!closeTarget} onClose={() => setCloseTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Mark as completed?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            Mark <strong>"{closeTarget?.title}"</strong> as completed? This closes the request.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCloseTarget(null)} disabled={closing}>Cancel</Button>
+          <Button color="success" variant="contained" onClick={confirmClose} disabled={closing}
+            startIcon={closing ? <CircularProgress size={14} color="inherit" /> : undefined}>
+            Mark completed
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <MaintenanceCreateDrawer
         open={drawerOpen}
@@ -389,30 +540,67 @@ function MaintenanceView({ canCreate }: { canCreate: boolean }) {
 
 // ─── Snag view ───────────────────────────────────────────────────────────────
 
-const SNAG_STATUS: Record<ExpenseRequestStatus, { label: string; color: 'default' | 'info' | 'warning' | 'success' | 'error' }> = {
-  scheduled: { label: 'Scheduled',       color: 'default' },
-  requested: { label: 'Pending approval', color: 'warning' },
-  approved:  { label: 'Approved',         color: 'info'    },
-  disbursed: { label: 'Disbursed',        color: 'info'    },
-  completed: { label: 'Completed',        color: 'success' },
-  withdrawn: { label: 'Withdrawn',        color: 'error'   },
-};
+const SNAG_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: 'all',       label: 'All statuses'     },
+  { value: 'scheduled', label: 'Scheduled'        },
+  { value: 'requested', label: 'Pending approval' },
+  { value: 'approved',  label: 'Approved'         },
+  { value: 'disbursed', label: 'Disbursed'        },
+  { value: 'completed', label: 'Completed'        },
+  { value: 'withdrawn', label: 'Withdrawn'        },
+];
 
-function SnagStatusChip({ status }: { status: ExpenseRequestStatus }) {
-  const cfg = SNAG_STATUS[status] ?? { label: status, color: 'default' };
-  return <Chip label={cfg.label} color={cfg.color} size="small" />;
-}
-
-function SnagView({ canSchedule, isAdmin, isFM }: { canSchedule: boolean; isAdmin: boolean; isFM: boolean }) {
+function SnagView({
+  canSchedule, isAdmin, isFM, onRowClick,
+}: {
+  canSchedule: boolean;
+  isAdmin: boolean;
+  isFM: boolean;
+  onRowClick: (r: ExpenseRequest) => void;
+}) {
   const { requests, loading } = useExpenseRequests('snag');
-  const [scheduleOpen,  setScheduleOpen]  = useState(false);
-  const [takeUpTarget,  setTakeUpTarget]  = useState<ExpenseRequest | null>(null);
+  const [scheduleOpen,   setScheduleOpen]   = useState(false);
+  const [takeUpTarget,   setTakeUpTarget]   = useState<ExpenseRequest | null>(null);
   const [withdrawTarget, setWithdrawTarget] = useState<ExpenseRequest | null>(null);
-  const [successMsg,    setSuccessMsg]    = useState('');
-  const [withdrawing,   setWithdrawing]   = useState(false);
-  const [withdrawError, setWithdrawError] = useState('');
+  const [disbTarget,     setDisbTarget]     = useState<ExpenseRequest | null>(null);
+  const [successMsg,     setSuccessMsg]     = useState('');
+  const [withdrawing,    setWithdrawing]    = useState(false);
+  const [withdrawError,  setWithdrawError]  = useState('');
 
-  function handleCreated(_id: string) {
+  // Filters (S3.27)
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [windowFilter, setWindowFilter] = useState('all');
+
+  // Derive unique window labels from loaded data
+  const windowLabels = [...new Set(
+    requests.map(r => r.plan?.label).filter(Boolean) as string[],
+  )].sort();
+
+  const filtersActive = statusFilter !== 'all' || windowFilter !== 'all';
+
+  function clearFilters() { setStatusFilter('all'); setWindowFilter('all'); }
+
+  const filtered = requests.filter(r => {
+    if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+    if (windowFilter !== 'all' && (r.plan?.label ?? '') !== windowFilter) return false;
+    return true;
+  });
+
+  // Separate withdrawn from active for grouping
+  const active    = filtered.filter(r => r.status !== 'withdrawn');
+  const withdrawn = filtered.filter(r => r.status === 'withdrawn');
+
+  // Group active by window label
+  const groups = new Map<string, ExpenseRequest[]>();
+  for (const r of active) {
+    const key = r.plan?.label ?? 'No window';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(r);
+  }
+
+  const showActionsCol = isAdmin || isFM;
+
+  function handleCreated() {
     setScheduleOpen(false);
     setSuccessMsg('Snag scheduled successfully.');
     setTimeout(() => setSuccessMsg(''), 4000);
@@ -426,8 +614,7 @@ function SnagView({ canSchedule, isAdmin, isFM }: { canSchedule: boolean; isAdmi
 
   async function confirmWithdraw() {
     if (!withdrawTarget) return;
-    setWithdrawing(true);
-    setWithdrawError('');
+    setWithdrawing(true); setWithdrawError('');
     try {
       await withdrawFn({ requestId: withdrawTarget.id });
       setWithdrawTarget(null);
@@ -438,20 +625,6 @@ function SnagView({ canSchedule, isAdmin, isFM }: { canSchedule: boolean; isAdmi
       setWithdrawing(false);
     }
   }
-
-  // Group non-withdrawn by plan.label; keep a separate section for withdrawn
-  const active    = requests.filter(r => r.status !== 'withdrawn');
-  const withdrawn = requests.filter(r => r.status === 'withdrawn');
-
-  // Group by window label
-  const groups = new Map<string, ExpenseRequest[]>();
-  for (const r of active) {
-    const key = r.plan?.label ?? 'No window';
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(r);
-  }
-
-  const showActionsCol = isAdmin || isFM;
 
   if (loading) return <CircularProgress size={24} sx={{ m: 2 }} />;
 
@@ -467,12 +640,46 @@ function SnagView({ canSchedule, isAdmin, isFM }: { canSchedule: boolean; isAdmi
         )}
       </Stack>
 
+      {/* Filter bar */}
+      <Stack direction="row" spacing={1.5} alignItems="center" mb={2} flexWrap="wrap">
+        <FilterListIcon fontSize="small" color="action" />
+        <TextField
+          select size="small" label="Status" sx={{ minWidth: 170 }}
+          value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+        >
+          {SNAG_STATUS_OPTIONS.map(o => (
+            <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+          ))}
+        </TextField>
+        {windowLabels.length > 0 && (
+          <TextField
+            select size="small" label="Budget window" sx={{ minWidth: 170 }}
+            value={windowFilter} onChange={e => setWindowFilter(e.target.value)}
+          >
+            <MenuItem value="all">All windows</MenuItem>
+            {windowLabels.map(lbl => (
+              <MenuItem key={lbl} value={lbl}>{lbl}</MenuItem>
+            ))}
+          </TextField>
+        )}
+        {filtersActive && (
+          <Button size="small" onClick={clearFilters}>Clear</Button>
+        )}
+        {filtersActive && (
+          <Typography variant="caption" color="text.secondary">
+            {filtered.length} of {requests.length}
+          </Typography>
+        )}
+      </Stack>
+
       {successMsg   && <Alert severity="success" sx={{ mb: 2 }}>{successMsg}</Alert>}
       {withdrawError && <Alert severity="error"  sx={{ mb: 2 }}>{withdrawError}</Alert>}
 
       {active.length === 0 && withdrawn.length === 0 && (
         <Alert severity="info">
-          No snags yet.{canSchedule ? ' Use "Schedule snag" to create one.' : ''}
+          {requests.length === 0
+            ? `No snags yet.${canSchedule ? ' Use "Schedule snag" to create one.' : ''}`
+            : 'No snags match the current filters.'}
         </Alert>
       )}
 
@@ -496,7 +703,11 @@ function SnagView({ canSchedule, isAdmin, isFM }: { canSchedule: boolean; isAdmi
               </TableHead>
               <TableBody>
                 {items.map(r => (
-                  <TableRow key={r.id} hover>
+                  <TableRow
+                    key={r.id} hover
+                    sx={{ cursor: 'pointer' }}
+                    onClick={() => onRowClick(r)}
+                  >
                     <TableCell>
                       <Typography variant="body2" fontWeight={500}>{r.title}</Typography>
                       {r.location && (
@@ -505,14 +716,20 @@ function SnagView({ canSchedule, isAdmin, isFM }: { canSchedule: boolean; isAdmi
                     </TableCell>
                     <TableCell sx={{ textTransform: 'capitalize' }}>{r.category}</TableCell>
                     <TableCell align="right">{formatMoney(r.estCostPaise)}</TableCell>
-                    <TableCell><SnagStatusChip status={r.status} /></TableCell>
+                    <TableCell><RequestStatusChip status={r.status} /></TableCell>
                     <TableCell>{formatDate(r.createdAt)}</TableCell>
                     {showActionsCol && (
-                      <TableCell>
+                      <TableCell onClick={e => e.stopPropagation()}>
                         {isFM && r.status === 'scheduled' && (
                           <Button size="small" variant="outlined"
                             onClick={() => setTakeUpTarget(r)}>
                             Take up
+                          </Button>
+                        )}
+                        {isFM && (r.status === 'approved' || r.status === 'disbursed') && (
+                          <Button size="small" variant="outlined" color="primary"
+                            onClick={() => setDisbTarget(r)}>
+                            Disburse
                           </Button>
                         )}
                         {isAdmin && r.status === 'scheduled' && (
@@ -531,7 +748,7 @@ function SnagView({ canSchedule, isAdmin, isFM }: { canSchedule: boolean; isAdmi
         </Box>
       ))}
 
-      {/* Withdrawn section (collapsed / dimmed) */}
+      {/* Withdrawn section */}
       {withdrawn.length > 0 && (
         <Box mt={2}>
           <Typography variant="overline" color="text.disabled" display="block" mb={1}>
@@ -549,11 +766,15 @@ function SnagView({ canSchedule, isAdmin, isFM }: { canSchedule: boolean; isAdmi
               </TableHead>
               <TableBody>
                 {withdrawn.map(r => (
-                  <TableRow key={r.id}>
+                  <TableRow
+                    key={r.id} hover
+                    sx={{ cursor: 'pointer' }}
+                    onClick={() => onRowClick(r)}
+                  >
                     <TableCell>{r.title}</TableCell>
                     <TableCell>{r.plan?.label ?? '—'}</TableCell>
                     <TableCell align="right">{formatMoney(r.estCostPaise)}</TableCell>
-                    <TableCell><SnagStatusChip status={r.status} /></TableCell>
+                    <TableCell><RequestStatusChip status={r.status} /></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -579,6 +800,18 @@ function SnagView({ canSchedule, isAdmin, isFM }: { canSchedule: boolean; isAdmi
         </DialogActions>
       </Dialog>
 
+      {disbTarget && (
+        <DisbursementDialog
+          request={disbTarget}
+          onClose={() => setDisbTarget(null)}
+          onDisbursed={() => {
+            setSuccessMsg(`Disbursement recorded for "${disbTarget.title}".`);
+            setDisbTarget(null);
+            setTimeout(() => setSuccessMsg(''), 5000);
+          }}
+        />
+      )}
+
       <SnagScheduleDrawer
         open={scheduleOpen}
         onClose={() => setScheduleOpen(false)}
@@ -595,6 +828,186 @@ function SnagView({ canSchedule, isAdmin, isFM }: { canSchedule: boolean; isAdmi
   );
 }
 
+// ─── Requested queue view ─────────────────────────────────────────────────────
+
+function RequestedQueueView({
+  isMC, isFM, isAdmin, onRowClick,
+}: {
+  isMC: boolean;
+  isFM: boolean;
+  isAdmin: boolean;
+  onRowClick: (r: ExpenseRequest) => void;
+}) {
+  const { requests, loading } = useRequestedQueue();
+  const { user } = useAuth();
+  const [approving,      setApproving]      = useState<string | null>(null);
+  const [approveError,   setApproveError]   = useState('');
+  const [successMsg,     setSuccessMsg]     = useState('');
+  const [notesTarget,    setNotesTarget]    = useState<ExpenseRequest | null>(null);
+  const [withdrawTarget, setWithdrawTarget] = useState<ExpenseRequest | null>(null);
+  const [withdrawing,    setWithdrawing]    = useState(false);
+  const [withdrawError,  setWithdrawError]  = useState('');
+
+  async function handleApprove(r: ExpenseRequest) {
+    setApproving(r.id); setApproveError('');
+    try {
+      const result = await approveFn({ requestId: r.id });
+      setSuccessMsg(result.data.approved
+        ? `"${r.title}" fully approved.`
+        : `Approval recorded for "${r.title}".`);
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (e: unknown) {
+      setApproveError(e instanceof Error ? e.message : 'Approval failed.');
+    } finally {
+      setApproving(null);
+    }
+  }
+
+  async function confirmWithdraw() {
+    if (!withdrawTarget) return;
+    setWithdrawing(true); setWithdrawError('');
+    try {
+      await withdrawFn({ requestId: withdrawTarget.id });
+      setSuccessMsg(`"${withdrawTarget.title}" withdrawn.`);
+      setTimeout(() => setSuccessMsg(''), 4000);
+      setWithdrawTarget(null);
+    } catch (e: unknown) {
+      setWithdrawError(e instanceof Error ? e.message : 'Withdraw failed.');
+      setWithdrawTarget(null);
+    } finally {
+      setWithdrawing(false);
+    }
+  }
+
+  if (loading) return <CircularProgress size={24} sx={{ m: 2 }} />;
+
+  return (
+    <>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+        <Typography variant="subtitle1" fontWeight={500}>Requested queue</Typography>
+        <Typography variant="caption" color="text.secondary">Oldest first</Typography>
+      </Stack>
+
+      {successMsg    && <Alert severity="success" sx={{ mb: 2 }}>{successMsg}</Alert>}
+      {approveError  && <Alert severity="error"   sx={{ mb: 2 }}>{approveError}</Alert>}
+      {withdrawError && <Alert severity="error"   sx={{ mb: 2 }}>{withdrawError}</Alert>}
+
+      <Dialog open={!!withdrawTarget} onClose={() => setWithdrawTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Withdraw request?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            Withdraw <strong>"{withdrawTarget?.title}"</strong>? This cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setWithdrawTarget(null)} disabled={withdrawing}>Cancel</Button>
+          <Button color="error" variant="contained" onClick={confirmWithdraw} disabled={withdrawing}
+            startIcon={withdrawing ? <CircularProgress size={14} color="inherit" /> : undefined}>
+            Withdraw
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {notesTarget && (
+        <RequestNotesDialog
+          requestId={notesTarget.id}
+          title={notesTarget.title}
+          isMC={isMC}
+          onClose={() => setNotesTarget(null)}
+        />
+      )}
+
+      {requests.length === 0 ? (
+        <Alert severity="info">No pending requests in the approval queue.</Alert>
+      ) : (
+        <Paper variant="outlined">
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Title</TableCell>
+                <TableCell>Type</TableCell>
+                <TableCell>Category</TableCell>
+                <TableCell align="right">Est. cost</TableCell>
+                <TableCell>Submitted</TableCell>
+                <TableCell>Approvals</TableCell>
+                <TableCell />
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {requests.map(r => {
+                const alreadyApproved = r.approvedBy?.includes(user?.uid ?? '') ?? false;
+                const approvalCount   = r.approvalCount ?? 0;
+                const required        = r.requiredApprovers ?? 1;
+                return (
+                  <TableRow
+                    key={r.id} hover
+                    sx={{ cursor: 'pointer' }}
+                    onClick={() => onRowClick(r)}
+                  >
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={500}>{r.title}</Typography>
+                      {r.location && (
+                        <Typography variant="caption" color="text.secondary">{r.location}</Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={r.type === 'maintenance' ? 'Maintenance' : 'Snag'}
+                        size="small"
+                        color={r.type === 'snag' ? 'secondary' : 'default'}
+                        variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell sx={{ textTransform: 'capitalize' }}>{r.category}</TableCell>
+                    <TableCell align="right">{formatMoney(r.estCostPaise)}</TableCell>
+                    <TableCell>{formatDate(r.submittedAt)}</TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color={approvalCount >= required ? 'success.main' : 'text.primary'}>
+                        {approvalCount} / {required}
+                      </Typography>
+                    </TableCell>
+                    <TableCell onClick={e => e.stopPropagation()}>
+                      <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        <Button size="small" variant="outlined"
+                          startIcon={<StickyNote2Icon fontSize="small" />}
+                          onClick={() => setNotesTarget(r)}>
+                          Notes
+                        </Button>
+                        {(isFM && r.type === 'maintenance') || (isAdmin && r.type === 'snag') ? (
+                          <Button size="small" variant="outlined" color="error"
+                            onClick={() => setWithdrawTarget(r)}>
+                            Withdraw
+                          </Button>
+                        ) : null}
+                        {isMC && (
+                          alreadyApproved ? (
+                            <Typography variant="caption" color="success.main" sx={{ alignSelf: 'center' }}>
+                              Approved ✓
+                            </Typography>
+                          ) : (
+                            <Button size="small" variant="outlined" color="success"
+                              disabled={approving === r.id}
+                              onClick={() => handleApprove(r)}
+                              startIcon={approving === r.id
+                                ? <CircularProgress size={12} color="inherit" />
+                                : undefined}>
+                              Approve
+                            </Button>
+                          )
+                        )}
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </Paper>
+      )}
+    </>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PayablesPage() {
@@ -602,9 +1015,24 @@ export default function PayablesPage() {
   const [period, setPeriod] = useState(current);
   const [tab, setTab]       = useState(0);
   const { role } = useAuth();
+  const [searchParams] = useSearchParams();
+
+  // Detail drawer state (S3.28)
+  const [selectedRequest,   setSelectedRequest]   = useState<ExpenseRequest | null>(null);
+  const [detailTakeUpTarget, setDetailTakeUpTarget] = useState<ExpenseRequest | null>(null);
+
+  useEffect(() => {
+    const t = searchParams.get('tab');
+    if (!t) return;
+    const idx = t === 'maintenance' ? 1 : t === 'snags' ? 2 : t === 'queue' ? 3 : 0;
+    setTab(idx);
+  }, [searchParams]);
+
   const canPay    = role === 'admin' || role === 'fm';
   const canCreate = role === 'admin' || role === 'fm';
   const isFuture  = period > current;
+
+  function openDetail(r: ExpenseRequest) { setSelectedRequest(r); }
 
   return (
     <Box>
@@ -613,9 +1041,10 @@ export default function PayablesPage() {
       <Tabs value={tab} onChange={(_, v) => setTab(v)}
         sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}
         variant="scrollable" scrollButtons="auto">
-        <Tab label="Recurring" id="payables-tab-0" aria-controls="payables-panel-0" />
+        <Tab label="Recurring"   id="payables-tab-0" aria-controls="payables-panel-0" />
         <Tab label="Maintenance" id="payables-tab-1" aria-controls="payables-panel-1" />
-        <Tab label="Snags" id="payables-tab-2" aria-controls="payables-panel-2" />
+        <Tab label="Snags"       id="payables-tab-2" aria-controls="payables-panel-2" />
+        <Tab label="Queue"       id="payables-tab-3" aria-controls="payables-panel-3" />
       </Tabs>
 
       {/* Recurring tab */}
@@ -641,13 +1070,56 @@ export default function PayablesPage() {
 
       {/* Maintenance tab */}
       <Box role="tabpanel" id="payables-panel-1" aria-labelledby="payables-tab-1" hidden={tab !== 1}>
-        {tab === 1 && <MaintenanceView canCreate={canCreate} />}
+        {tab === 1 && (
+          <MaintenanceView
+            canCreate={canCreate}
+            isFM={role === 'fm'}
+            onRowClick={openDetail}
+          />
+        )}
       </Box>
 
       {/* Snags tab */}
       <Box role="tabpanel" id="payables-panel-2" aria-labelledby="payables-tab-2" hidden={tab !== 2}>
-        {tab === 2 && <SnagView canSchedule={role === 'admin'} isAdmin={role === 'admin'} isFM={role === 'fm'} />}
+        {tab === 2 && (
+          <SnagView
+            canSchedule={role === 'admin'}
+            isAdmin={role === 'admin'}
+            isFM={role === 'fm'}
+            onRowClick={openDetail}
+          />
+        )}
       </Box>
+
+      {/* Queue tab */}
+      <Box role="tabpanel" id="payables-panel-3" aria-labelledby="payables-tab-3" hidden={tab !== 3}>
+        {tab === 3 && (
+          <RequestedQueueView
+            isMC={role === 'mc'}
+            isFM={role === 'fm'}
+            isAdmin={role === 'admin'}
+            onRowClick={openDetail}
+          />
+        )}
+      </Box>
+
+      {/* Detail drawer (S3.28) */}
+      <RequestDetailDrawer
+        request={selectedRequest}
+        onClose={() => setSelectedRequest(null)}
+        onTakeUp={r => {
+          setSelectedRequest(null);
+          setDetailTakeUpTarget(r);
+        }}
+      />
+
+      {/* Take-up drawer triggered from the detail drawer */}
+      <SnagTakeUpDrawer
+        open={!!detailTakeUpTarget}
+        snag={detailTakeUpTarget}
+        onClose={() => setDetailTakeUpTarget(null)}
+        onSubmitted={() => setDetailTakeUpTarget(null)}
+      />
     </Box>
   );
 }

@@ -19,6 +19,7 @@ ui-debug.log*
 
 # test / coverage
 coverage/
+test-fixtures/
 
 # editor / os
 .vscode/*

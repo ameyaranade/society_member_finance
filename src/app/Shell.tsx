@@ -30,6 +30,7 @@ import { signOut } from 'firebase/auth';
 import { useThemeMode } from '../theme/useThemeMode';
 import { useAuth } from '../features/auth/useAuth';
 import { auth } from '../lib/firebase';
+import NotificationBell from '../features/notifications/NotificationBell';
 
 const NAV_WIDTH = 220;
 
@@ -115,6 +116,7 @@ export default function Shell() {
               {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
             </IconButton>
           </Tooltip>
+          <NotificationBell />
           <Tooltip title={user?.email ?? 'Account'}>
             <IconButton
               color="inherit"

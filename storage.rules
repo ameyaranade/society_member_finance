@@ -21,11 +21,12 @@ service firebase.storage {
 
     // Uploaded file must be a PDF, image, or Excel; max 10 MB
     function isAllowedFile() {
-      return request.resource.size < 10 * 1024 * 1024 &&
+      return request.resource.size < 10 * 1024 * 1024 && (
         request.resource.contentType.matches('application/pdf') ||
         request.resource.contentType.matches('image/.*') ||
         request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') ||
-        request.resource.contentType.matches('application/vnd.ms-excel');
+        request.resource.contentType.matches('application/vnd.ms-excel')
+      );
     }
 
     // ── Society-scoped paths ─────────────────────────────────────────────────
@@ -33,6 +34,13 @@ service firebase.storage {
     match /societies/{societyId}/{allPaths=**} {
       // Default deny within a society — specific rules below override
       allow read, write: if false;
+    }
+
+    // Quotation doc staging area — used before requestId is known (FM/Admin upload; all members read)
+    match /societies/{societyId}/expense-requests/staging/{uploadId}/{fileName} {
+      allow read:   if isMember(societyId);
+      allow create: if isAdminOrFM(societyId) && isAllowedFile();
+      allow update, delete: if false;
     }
 
     // Expense request quotation documents (FM/Admin upload; all members read)

@@ -13,17 +13,21 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AddIcon from '@mui/icons-material/Add';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../lib/firebase';
+import { useAuth } from '../auth/useAuth';
 import { formatMoney, toPaise } from '../../lib/money';
 import type { ExpenseRequest } from '../../types/requests';
+import FileUploadButton from './FileUploadButton';
 
 interface QuotationRow {
   vendorId: string;
   amountRupees: string;
   scopeNotes: string;
+  uploadKey: string;
+  documentRef?: string;
 }
 
 const submitExpenseFn = httpsCallable<
-  { requestId: string; quotations: { vendorId: string; amountPaise: number; scopeNotes: string }[] },
+  { requestId: string; quotations: { vendorId: string; amountPaise: number; scopeNotes: string; documentRef?: string }[] },
   { ok: true }
 >(functions, 'submitExpenseRequest');
 
@@ -35,10 +39,11 @@ interface Props {
 }
 
 function emptyRow(): QuotationRow {
-  return { vendorId: '', amountRupees: '', scopeNotes: '' };
+  return { vendorId: '', amountRupees: '', scopeNotes: '', uploadKey: crypto.randomUUID() };
 }
 
 export default function SnagTakeUpDrawer({ open, snag, onClose, onSubmitted }: Props) {
+  const { societyId } = useAuth();
   const [rows,       setRows]       = useState<QuotationRow[]>([emptyRow()]);
   const [submitting, setSubmitting] = useState(false);
   const [error,      setError]      = useState('');
@@ -48,8 +53,8 @@ export default function SnagTakeUpDrawer({ open, snag, onClose, onSubmitted }: P
     setError('');
   }
 
-  function updateRow(idx: number, field: keyof QuotationRow, value: string) {
-    setRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+  function updateRow(idx: number, patch: Partial<QuotationRow>) {
+    setRows(prev => prev.map((r, i) => i === idx ? { ...r, ...patch } : r));
   }
 
   function addRow() { setRows(prev => [...prev, emptyRow()]); }
@@ -71,7 +76,12 @@ export default function SnagTakeUpDrawer({ open, snag, onClose, onSubmitted }: P
         setError(`Quotation ${i + 1}: amount must be a positive number.`); return;
       }
       if (!r.scopeNotes.trim()) { setError(`Quotation ${i + 1}: scope notes are required.`); return; }
-      quotations.push({ vendorId: r.vendorId.trim(), amountPaise: paise, scopeNotes: r.scopeNotes.trim() });
+      quotations.push({
+        vendorId: r.vendorId.trim(),
+        amountPaise: paise,
+        scopeNotes: r.scopeNotes.trim(),
+        ...(r.documentRef ? { documentRef: r.documentRef } : {}),
+      });
     }
 
     setSubmitting(true);
@@ -133,14 +143,21 @@ export default function SnagTakeUpDrawer({ open, snag, onClose, onSubmitted }: P
             </Stack>
             <Stack spacing={1.5}>
               <TextField label="Vendor / contractor name" required size="small" fullWidth
-                value={row.vendorId} onChange={e => updateRow(idx, 'vendorId', e.target.value)} />
+                value={row.vendorId} onChange={e => updateRow(idx, { vendorId: e.target.value })} />
               <TextField label="Quoted amount (₹)" required size="small" fullWidth
                 type="number" inputProps={{ min: 1, step: 1000 }}
-                value={row.amountRupees} onChange={e => updateRow(idx, 'amountRupees', e.target.value)}
+                value={row.amountRupees} onChange={e => updateRow(idx, { amountRupees: e.target.value })}
                 helperText={row.amountRupees && !isNaN(parseFloat(row.amountRupees))
                   ? formatMoney(toPaise(parseFloat(row.amountRupees))) : ''} />
               <TextField label="Scope notes" required size="small" fullWidth multiline minRows={2}
-                value={row.scopeNotes} onChange={e => updateRow(idx, 'scopeNotes', e.target.value)} />
+                value={row.scopeNotes} onChange={e => updateRow(idx, { scopeNotes: e.target.value })} />
+              <FileUploadButton
+                storagePathPrefix={`societies/${societyId}/expense-requests/staging/${row.uploadKey}`}
+                label="Attach quotation (PDF/image)"
+                disabled={submitting || !societyId}
+                onUploaded={path => updateRow(idx, { documentRef: path })}
+                onRemoved={() => updateRow(idx, { documentRef: undefined })}
+              />
             </Stack>
           </Box>
         ))}

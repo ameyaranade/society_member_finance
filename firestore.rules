@@ -149,6 +149,14 @@ service cloud.firestore {
         allow read:  if isMember(societyId);
         allow write: if hasRole(societyId, 'admin');
       }
+
+      // Notifications — Functions-only writes; each user reads and marks their own
+      match /notifications/{notificationId} {
+        allow read:   if isMember(societyId) && request.auth.uid == resource.data.toUid;
+        allow update: if isMember(societyId) && request.auth.uid == resource.data.toUid
+                         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']);
+        allow create, delete: if false;
+      }
     }
 
     // Default deny — everything else

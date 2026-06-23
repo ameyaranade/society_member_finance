@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../lib/admin';
 import { writeAudit } from '../lib/audit';
+import { dispatchNotification } from '../lib/notify';
 import { fetchApprovalTiers, resolveTier, getActiveMCCount } from '../lib/tierHelpers';
 import type {
   ExpenseCategory,
@@ -146,6 +147,13 @@ export const createMaintenanceRequest = onCall(
       targetId: requestId,
       after: { type: 'maintenance', title: input.title.trim(), estCostPaise: input.estCostPaise },
     });
+
+    void dispatchNotification({
+      societyId,
+      type: 'expense_request_created',
+      toRole: 'mc',
+      payload: { requestId, title: input.title.trim(), requestType: 'maintenance' },
+    }).catch(e => console.error('notify error:', e));
 
     return { requestId };
   },

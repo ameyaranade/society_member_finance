@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.withdrawExpenseRequest = exports.scheduleSnag = exports.submitExpenseRequest = exports.createMaintenanceRequest = exports.markInstancePaid = exports.generateRecurringInstances = exports.scheduledRecurring = exports.recomputeBalances = exports.recordPayment = exports.updateMembership = exports.inviteUser = exports.createSociety = exports.refreshClaims = exports.ping = void 0;
+exports.closeExpenseRequest = exports.recordDisbursement = exports.recordApproval = exports.withdrawExpenseRequest = exports.scheduleSnag = exports.submitExpenseRequest = exports.createMaintenanceRequest = exports.markInstancePaid = exports.generateRecurringInstances = exports.scheduledRecurring = exports.recomputeBalances = exports.recordPayment = exports.updateMembership = exports.inviteUser = exports.createSociety = exports.refreshClaims = exports.ping = void 0;
 const app_1 = require("firebase-admin/app");
 (0, app_1.initializeApp)();
 var ping_1 = require("./callable/ping");
@@ -30,3 +30,9 @@ var scheduleSnag_1 = require("./callable/scheduleSnag");
 Object.defineProperty(exports, "scheduleSnag", { enumerable: true, get: function () { return scheduleSnag_1.scheduleSnag; } });
 var withdrawExpenseRequest_1 = require("./callable/withdrawExpenseRequest");
 Object.defineProperty(exports, "withdrawExpenseRequest", { enumerable: true, get: function () { return withdrawExpenseRequest_1.withdrawExpenseRequest; } });
+var recordApproval_1 = require("./callable/recordApproval");
+Object.defineProperty(exports, "recordApproval", { enumerable: true, get: function () { return recordApproval_1.recordApproval; } });
+var recordDisbursement_1 = require("./callable/recordDisbursement");
+Object.defineProperty(exports, "recordDisbursement", { enumerable: true, get: function () { return recordDisbursement_1.recordDisbursement; } });
+var closeExpenseRequest_1 = require("./callable/closeExpenseRequest");
+Object.defineProperty(exports, "closeExpenseRequest", { enumerable: true, get: function () { return closeExpenseRequest_1.closeExpenseRequest; } });

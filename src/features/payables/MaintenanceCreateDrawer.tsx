@@ -14,15 +14,19 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../lib/firebase';
+import { useAuth } from '../auth/useAuth';
 import { useVendors } from '../settings/useVendors';
 import { formatMoney, toPaise } from '../../lib/money';
 import type { ExpenseCategory, ExpensePriority } from '../../types/requests';
 import type { FundCode } from '../../types/config';
+import FileUploadButton from './FileUploadButton';
 
 interface QuotationRow {
   vendorId: string;
   amountRupees: string;
   scopeNotes: string;
+  uploadKey: string;    // UUID for staging storage path (generated at row creation)
+  documentRef?: string; // set after file upload
 }
 
 const PRIORITIES: { value: ExpensePriority; label: string }[] = [
@@ -49,7 +53,9 @@ const FUND_HEADS: { value: FundCode; label: string }[] = [
   { value: 'repair',  label: 'Repair & maintenance' },
 ];
 
-const EMPTY_QUOTE: QuotationRow = { vendorId: '', amountRupees: '', scopeNotes: '' };
+function emptyQuote(): QuotationRow {
+  return { vendorId: '', amountRupees: '', scopeNotes: '', uploadKey: crypto.randomUUID() };
+}
 
 const createMaintenanceRequestFn = httpsCallable<
   {
@@ -69,6 +75,7 @@ interface Props {
 
 export default function MaintenanceCreateDrawer({ open, onClose, onCreated }: Props) {
   const { vendors } = useVendors();
+  const { societyId } = useAuth();
 
   const [title,       setTitle]       = useState('');
   const [description, setDescription] = useState('');
@@ -77,14 +84,14 @@ export default function MaintenanceCreateDrawer({ open, onClose, onCreated }: Pr
   const [category,    setCategory]    = useState<ExpenseCategory>('electrical');
   const [fundHead,    setFundHead]    = useState<FundCode>('general');
   const [estRupees,   setEstRupees]   = useState('');
-  const [quotations,  setQuotations]  = useState<QuotationRow[]>([{ ...EMPTY_QUOTE }]);
+  const [quotations,  setQuotations]  = useState<QuotationRow[]>([emptyQuote()]);
   const [submitting,  setSubmitting]  = useState(false);
   const [error,       setError]       = useState('');
 
   function reset() {
     setTitle(''); setDescription(''); setLocation('');
     setPriority('medium'); setCategory('electrical'); setFundHead('general');
-    setEstRupees(''); setQuotations([{ ...EMPTY_QUOTE }]); setError('');
+    setEstRupees(''); setQuotations([emptyQuote()]); setError('');
   }
 
   function handleClose() { reset(); onClose(); }
@@ -118,9 +125,10 @@ export default function MaintenanceCreateDrawer({ open, onClose, onCreated }: Pr
         priority, category, fundHead,
         estCostPaise,
         quotations: quotations.map(q => ({
-          vendorId:   q.vendorId,
+          vendorId:    q.vendorId,
           amountPaise: toPaise(parseFloat(q.amountRupees)),
-          scopeNotes: q.scopeNotes.trim(),
+          scopeNotes:  q.scopeNotes.trim(),
+          ...(q.documentRef ? { documentRef: q.documentRef } : {}),
         })),
       });
       reset();
@@ -178,7 +186,7 @@ export default function MaintenanceCreateDrawer({ open, onClose, onCreated }: Pr
           <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1.5}>
             <Typography variant="subtitle2">Quotations</Typography>
             <Button size="small" startIcon={<AddIcon />}
-              onClick={() => setQuotations(qs => [...qs, { ...EMPTY_QUOTE }])}>
+              onClick={() => setQuotations(qs => [...qs, emptyQuote()])}>
               Add quotation
             </Button>
           </Stack>
@@ -207,6 +215,13 @@ export default function MaintenanceCreateDrawer({ open, onClose, onCreated }: Pr
                       ? formatMoney(toPaise(parseFloat(q.amountRupees))) : undefined} />
                   <TextField label="Scope notes" size="small" fullWidth required multiline minRows={2}
                     value={q.scopeNotes} onChange={e => updateQuote(i, { scopeNotes: e.target.value })} />
+                  <FileUploadButton
+                    storagePathPrefix={`societies/${societyId}/expense-requests/staging/${q.uploadKey}`}
+                    label="Attach quotation (PDF/image)"
+                    disabled={submitting || !societyId}
+                    onUploaded={path => updateQuote(i, { documentRef: path })}
+                    onRemoved={() => updateQuote(i, { documentRef: undefined })}
+                  />
                 </Stack>
               </Box>
             ))}

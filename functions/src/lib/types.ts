@@ -84,6 +84,7 @@ export interface ExpenseRequest {
   fundHead: string;
   estCostPaise: number;
   approvedAmountPaise?: number;
+  disbursedAmountPaise?: number;   // running sum of all disbursements posted (D9a)
   requiredApprovers?: number;
   status: ExpenseRequestStatus;
   plan?: BudgetWindow;

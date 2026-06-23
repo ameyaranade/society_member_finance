@@ -44,8 +44,11 @@ export interface ExpenseRequest {
   category: ExpenseCategory;
   fundHead: FundCode;
   estCostPaise: number;
-  approvedAmountPaise?: number;   // hard cap set when status → 'approved' (D9a)
-  requiredApprovers?: number;     // snapshotted from tier at submit (D9)
+  approvedAmountPaise?: number;    // hard cap set when status → 'approved' (D9a)
+  disbursedAmountPaise?: number;   // running sum of all disbursements posted (D9a)
+  requiredApprovers?: number;      // snapshotted from tier at submit (D9)
+  approvalCount?: number;         // denormalized count of MC approvals so far
+  approvedBy?: string[];          // denormalized list of MC UIDs who approved (for UI self-check)
   status: ExpenseRequestStatus;
   plan?: BudgetWindow;            // snag only (D9c)
   parentRequestId?: string;       // top-up link (D9a)

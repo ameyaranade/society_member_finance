@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../lib/admin';
 import { writeAudit } from '../lib/audit';
+import { dispatchNotification } from '../lib/notify';
 import { fetchApprovalTiers, resolveTier, getActiveMCCount } from '../lib/tierHelpers';
 import type { Quotation } from '../lib/types';
 
@@ -117,6 +118,13 @@ export const submitExpenseRequest = onCall(
       targetId: input.requestId,
       after: { status: 'requested', requiredApprovers },
     });
+
+    void dispatchNotification({
+      societyId,
+      type: 'expense_request_submitted',
+      toRole: 'mc',
+      payload: { requestId: input.requestId, title: data.title as string, requestType: 'snag' },
+    }).catch(e => console.error('notify error:', e));
 
     return { ok: true };
   },

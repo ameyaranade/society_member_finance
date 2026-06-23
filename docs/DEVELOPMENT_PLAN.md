@@ -215,50 +215,68 @@ Verify: e2e — scheduled snags grouped by window; admin withdraws; FM cannot.
 Do: FM adds quotations to a scheduled snag and submits (`scheduled` → `requested` via `submitExpenseRequest`).
 Verify: emulator test — take‑up transitions correctly; FM‑only.
 
-**S3.19 — Requested queue + index.**
+**S3.19 — Requested queue + index.** ✅
 Do: Shared **Requested queue** ordered by `submittedAt` (oldest→newest) with approval progress (X of N), visible to Admin/FM/MC; add `(status, submittedAt)` index. (D9d)
 Verify: e2e — ordering by age; visible to all three roles; index deployed.
 
-**S3.20 — `recordApproval` (MC, no reject).**
+**S3.20 — `recordApproval` (MC, no reject).** ✅
 Do: Record one MC approval (+ optional note); at `requiredApprovers` → `approved` (sets `approvedAmountPaise`); no reject; no self‑approval. (D9, D9d)
 Verify: emulator test — reaching N flips to approved; self‑approval denied; FM/Admin cannot approve.
 
-**S3.21 — MC notes.**
+**S3.21 — MC notes.** ✅
 Do: `notes` subcollection; MC adds notes on a request.
 Verify: e2e — MC note visible to FM/Admin; rules enforce author/role.
 
-**S3.22 — `recordDisbursement` (partial, capped, spend-gated).**
+**S3.22 — `recordDisbursement` (partial, capped, spend-gated).** ✅
 Do: FM posts partial/final disbursement (invoice + txn copy + evidence) → ledger txn; **reject unless status is `approved`/`disbursed`** (spend gate, D9e); reject if cumulative > `approvedAmountPaise` (D9a); set `disbursed`.
 Verify: emulator test — disbursement before approval is rejected; partials accumulate; overflow rejected; ledger updated.
 
-**S3.23 — Withdraw + close.**
+**S3.23 — Withdraw + close.** ✅
 Do: `withdrawExpenseRequest` (FM maintenance / Admin snag, only before any disbursement) + `closeExpenseRequest` (FM → `completed`).
 Verify: emulator test — withdraw blocked after first disbursement; role checks.
 
-**S3.24 — Notifications (in‑app + email).**
+**S3.24 — Notifications (in‑app + email).** ✅
 Do: `dispatchNotification` for submit/approval/withdraw/disburse events (in‑app docs + email stub). (D17)
 Verify: emulator test — events fan out; in‑app docs created; email adapter invoked.
+**Actual implementation:**
+- `functions/src/lib/notify.ts` — `dispatchNotification(societyId, type, payload, { toRole | toUids })` fans out by querying `/memberships` for active role members; writes one doc per recipient to `/societies/{sid}/notifications/{id}` with fields `toUid, type, payload, channels: ['in_app'], readAt: null`.
+- Wired into **6 callables** (fire-and-forget, never blocks main op): `createMaintenanceRequest` → MC, `submitExpenseRequest` → MC, `recordApproval` → FM (partial + full), `withdrawExpenseRequest` → MC, `recordDisbursement` → Admin, `closeExpenseRequest` → Admin.
+- Email is stub only (no transport wired); WhatsApp deferred per D17.
+- Firestore rules: `allow read` gated by `toUid == auth.uid`; `allow update` permits only `readAt` field change (mark-read).
+- Composite index added: `memberships (societyId ASC, role ASC, status ASC)` for fan-out queries.
+- Frontend: `useNotifications` hook (single `where toUid ==` query, unread filtered client-side) + `NotificationBell` in AppBar (badge with unread count, popover list with type icons + human-readable messages, per-item and mark-all-read).
+- Clicking a notification marks it read **and navigates** to the correct Payables tab: `expense_request_created/submitted/withdrawn` → `/payables?tab=queue`; approval/disburse/complete → `/payables?tab=maintenance` or `?tab=snags` based on `payload.requestType`.
+- `PayablesPage` reads `?tab=` search param (via `useSearchParams`) to select the correct tab on navigation.
 
 ### 3e. Payables UI
-**S3.25 — Payables shell + sub‑tabs.**
+**S3.25 — Payables shell + sub‑tabs.** ✅
 Do: Payables route with 3 sub‑tabs (Recurring | Maintenance | Snags) + role‑aware nav.
 Verify: e2e — tabs render per role; axe.
+**Actual implementation:** Built **4 tabs** (Recurring | Maintenance | Snags | Queue). MC sees all 4 tabs (Queue is their primary action surface). Tab state driven by local `useState`; initial value overridden by `?tab=` URL param so notification clicks land on the correct tab.
 
-**S3.26 — Maintenance list + filters.**
+**S3.26 — Maintenance list + filters.** ✅
 Do: Maintenance list with date‑range + status filters.
 Verify: e2e — filters narrow results correctly.
+**Actual implementation:** Status dropdown (All / Pending approval / Approved / Disbursed / Completed / Withdrawn) + "Created from" + "Created to" date inputs. Applied client-side against `createdAt`. Filter count shown when active. Clear button resets all. Rows clickable → `RequestDetailDrawer`.
 
-**S3.27 — Snag list + scheduled integration + filters.**
+**S3.27 — Snag list + scheduled integration + filters.** ✅
 Do: Snag list including scheduled items + window/status filters.
 Verify: e2e — scheduled + active snags listed; filters work.
+**Actual implementation:** Status dropdown + Budget window dropdown (derived from live plan labels in the loaded data, only shown when windows exist). Client-side filtering. Withdrawn section always separate. Rows clickable → `RequestDetailDrawer`.
 
-**S3.28 — 4‑stage request detail.**
+**S3.28 — 4‑stage request detail.** ✅
 Do: Request detail with stage tracker, quotation cards, approvals X/N, MC notes, partial‑disbursement list, and per‑role/stage actions.
 Verify: e2e per role across the full lifecycle; matches mockups; axe; light + dark.
+**Actual implementation:** `RequestDetailDrawer.tsx` — right drawer (xs: 100%, sm: 560px). Subscribes live to all 4 subcollections (quotations, approvals, notes, disbursements). Sections: header (title, type chip, status chip), MUI Stepper (maintenance: 4 steps; snag: 4 steps; withdrawn → Alert banner), Details row-grid, Quotations (vendor name + amount + scope), Approvals (X/N with borderLeft accent, "You" vs "MC member"), Notes (inline list + MC-only add input with Ctrl+Enter), Disbursements (amount, kind chip, date). Sticky action bar: Approve (MC, requested, not yet approved), Disburse (FM, approved/disbursed), Mark completed (FM, disbursed), Take up (FM, snag/scheduled → closes drawer, opens SnagTakeUpDrawer), Withdraw (FM maintenance/Admin snag, pre-disbursement). All list view rows (Maintenance, Snag, Queue) clickable; action buttons use `stopPropagation`.
 
-**S3.29 — Requested‑queue screen.**
+**S3.29 — Requested‑queue screen.** ✅
 Do: The aged Requested queue UI (from S3.19) with approve (MC) / withdraw (FM/Admin) actions.
 Verify: e2e — actions work per role; ordering by age.
+**Actual implementation:** `RequestedQueueView` in `PayablesPage.tsx`. Actions cell (right-aligned `Stack`):
+- **Notes** button (icon + label, all roles) — opens `RequestNotesDialog`; design-language compliant (no icon-only buttons).
+- **Approve / Approved ✓** (MC only) — calls `recordApproval`; approved rows show disabled ✓ chip.
+- **Withdraw** (red outlined, FM on maintenance rows / Admin on snag rows) — confirm dialog, then calls `withdrawExpenseRequest`.
+- Ordered by `submittedAt` ascending (oldest first).
 
 **S3.30 — P1 acceptance gate.**
 Do: Full payables e2e across roles (tiered approvals, capped partials, requested queue, withdraw, recurring monthly).

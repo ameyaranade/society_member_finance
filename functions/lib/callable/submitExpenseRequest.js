@@ -5,6 +5,7 @@ const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const admin_1 = require("../lib/admin");
 const audit_1 = require("../lib/audit");
+const notify_1 = require("../lib/notify");
 const tierHelpers_1 = require("../lib/tierHelpers");
 exports.submitExpenseRequest = (0, https_1.onCall)({ region: 'asia-south1' }, async (request) => {
     const uid = request.auth?.uid;
@@ -88,5 +89,11 @@ exports.submitExpenseRequest = (0, https_1.onCall)({ region: 'asia-south1' }, as
         targetId: input.requestId,
         after: { status: 'requested', requiredApprovers },
     });
+    void (0, notify_1.dispatchNotification)({
+        societyId,
+        type: 'expense_request_submitted',
+        toRole: 'mc',
+        payload: { requestId: input.requestId, title: data.title, requestType: 'snag' },
+    }).catch(e => console.error('notify error:', e));
     return { ok: true };
 });

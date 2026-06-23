@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../lib/admin';
 import { writeAudit } from '../lib/audit';
+import { dispatchNotification } from '../lib/notify';
 
 interface WithdrawExpenseRequestInput {
   requestId: string;
@@ -64,6 +65,13 @@ export const withdrawExpenseRequest = onCall(
       before: { status: data.status },
       after:  { status: 'withdrawn' },
     });
+
+    void dispatchNotification({
+      societyId,
+      type: 'expense_request_withdrawn',
+      toRole: 'mc',
+      payload: { requestId, title: data.title as string, requestType: data.type as string },
+    }).catch(e => console.error('notify error:', e));
 
     return { ok: true };
   },

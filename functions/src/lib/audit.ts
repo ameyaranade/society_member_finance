@@ -12,6 +12,7 @@ export type AuditAction =
   | 'expense_request_created'
   | 'expense_request_submitted'
   | 'expense_request_approved'
+  | 'expense_approval_recorded'
   | 'expense_request_withdrawn'
   | 'expense_request_disbursed'
   | 'expense_request_completed'

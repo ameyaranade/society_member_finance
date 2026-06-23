@@ -5,6 +5,7 @@ const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const admin_1 = require("../lib/admin");
 const audit_1 = require("../lib/audit");
+const notify_1 = require("../lib/notify");
 const tierHelpers_1 = require("../lib/tierHelpers");
 const VALID_PRIORITIES = new Set(['low', 'medium', 'high']);
 const VALID_CATEGORIES = new Set([
@@ -108,5 +109,11 @@ exports.createMaintenanceRequest = (0, https_1.onCall)({ region: 'asia-south1' }
         targetId: requestId,
         after: { type: 'maintenance', title: input.title.trim(), estCostPaise: input.estCostPaise },
     });
+    void (0, notify_1.dispatchNotification)({
+        societyId,
+        type: 'expense_request_created',
+        toRole: 'mc',
+        payload: { requestId, title: input.title.trim(), requestType: 'maintenance' },
+    }).catch(e => console.error('notify error:', e));
     return { requestId };
 });

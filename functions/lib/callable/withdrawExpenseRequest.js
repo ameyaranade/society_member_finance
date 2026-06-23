@@ -5,6 +5,7 @@ const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const admin_1 = require("../lib/admin");
 const audit_1 = require("../lib/audit");
+const notify_1 = require("../lib/notify");
 exports.withdrawExpenseRequest = (0, https_1.onCall)({ region: 'asia-south1' }, async (request) => {
     const uid = request.auth?.uid;
     if (!uid)
@@ -52,5 +53,11 @@ exports.withdrawExpenseRequest = (0, https_1.onCall)({ region: 'asia-south1' }, 
         before: { status: data.status },
         after: { status: 'withdrawn' },
     });
+    void (0, notify_1.dispatchNotification)({
+        societyId,
+        type: 'expense_request_withdrawn',
+        toRole: 'mc',
+        payload: { requestId, title: data.title, requestType: data.type },
+    }).catch(e => console.error('notify error:', e));
     return { ok: true };
 });
