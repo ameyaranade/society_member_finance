@@ -138,7 +138,7 @@ export default function MaintenanceCreateDrawer({ open, onClose, onCreated }: Pr
 
   return (
     <Drawer anchor="right" open={open} onClose={handleClose}
-      PaperProps={{ sx: { width: { xs: '100%', sm: 520 }, p: 3 } }}>
+      PaperProps={{ sx: { width: { xs: '100%', sm: 520 }, maxWidth: '100vw', p: 3 } }}>
       <Typography variant="h6" fontWeight={500} mb={3}>New maintenance request</Typography>
 
       <Stack spacing={2.5}>

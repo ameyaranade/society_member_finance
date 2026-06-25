@@ -233,8 +233,8 @@ function RecurringMonthView({ period, isFuture, canPay }: {
         <Alert severity="info" sx={{ mb: 2 }}>
           Projected — instances will be generated automatically on the 1st of the month.
         </Alert>
-        <Paper variant="outlined">
-          <Table size="small">
+        <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 440 }}>
             <TableHead>
               <TableRow>
                 <TableCell>Name</TableCell><TableCell>Due</TableCell>
@@ -281,8 +281,8 @@ function RecurringMonthView({ period, isFuture, canPay }: {
         <Chip label={`Pending: ${formatMoney(totalPending)}`} color="warning" variant="outlined" />
         <Chip label={`Paid: ${formatMoney(totalPaid)}`}    color="success" variant="outlined" />
       </Stack>
-      <Paper variant="outlined">
-        <Table size="small">
+      <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
+        <Table size="small" sx={{ minWidth: 480 }}>
           <TableHead>
             <TableRow>
               <TableCell>Name</TableCell><TableCell>Due</TableCell>
@@ -440,8 +440,8 @@ function MaintenanceView({
             : 'No requests match the current filters.'}
         </Alert>
       ) : (
-        <Paper variant="outlined">
-          <Table size="small">
+        <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 540 }}>
             <TableHead>
               <TableRow>
                 <TableCell>Title</TableCell>
@@ -682,8 +682,8 @@ function SnagView({
           <Typography variant="overline" color="text.secondary" display="block" mb={1}>
             {windowLabel}
           </Typography>
-          <Paper variant="outlined">
-            <Table size="small">
+          <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
+            <Table size="small" sx={{ minWidth: 540 }}>
               <TableHead>
                 <TableRow>
                   <TableCell>Title</TableCell>
@@ -747,8 +747,8 @@ function SnagView({
           <Typography variant="overline" color="text.disabled" display="block" mb={1}>
             Withdrawn ({withdrawn.length})
           </Typography>
-          <Paper variant="outlined" sx={{ opacity: 0.6 }}>
-            <Table size="small">
+          <Paper variant="outlined" sx={{ opacity: 0.6, overflowX: 'auto' }}>
+            <Table size="small" sx={{ minWidth: 380 }}>
               <TableHead>
                 <TableRow>
                   <TableCell>Title</TableCell>
@@ -938,8 +938,8 @@ function RequestedQueueView({
       {requests.length === 0 ? (
         <Alert severity="info">No pending requests in the approval queue.</Alert>
       ) : (
-        <Paper variant="outlined">
-          <Table size="small">
+        <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 700 }}>
             <TableHead>
               <TableRow>
                 <TableCell>Title</TableCell>

@@ -90,7 +90,7 @@ export default function Shell() {
   );
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', overflowX: 'hidden' }}>
       {/* Top AppBar */}
       <AppBar position="fixed" sx={{ zIndex: theme.zIndex.drawer + 1 }}>
         <Toolbar>
@@ -175,8 +175,9 @@ export default function Shell() {
           flexGrow: 1,
           mt: '64px',
           ml: isDesktop ? `${NAV_WIDTH}px` : 0,
-          p: 3,
+          p: { xs: 2, sm: 3 },
           minWidth: 0,
+          overflowX: 'hidden',
         }}
       >
         <Outlet />

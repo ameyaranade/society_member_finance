@@ -348,6 +348,7 @@ export default function RequestDetailDrawer({ request, onClose, onTakeUp }: Prop
         PaperProps={{
           sx: {
             width: { xs: '100%', sm: 560 },
+            maxWidth: '100vw',
             display: 'flex',
             flexDirection: 'column',
             top: '64px',

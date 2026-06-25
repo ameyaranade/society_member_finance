@@ -163,7 +163,7 @@ export default function SnagScheduleDrawer({ open, onClose, onCreated }: Props) 
 
   return (
     <Drawer anchor="right" open={open} onClose={() => { reset(); onClose(); }}
-      PaperProps={{ sx: { width: { xs: '100%', sm: 560 }, p: 3, overflowY: 'auto' } }}>
+      PaperProps={{ sx: { width: { xs: '100%', sm: 560 }, maxWidth: '100vw', p: 3, overflowY: 'auto' } }}>
       <Typography variant="h6" fontWeight={500} mb={3}>Schedule snag</Typography>
 
       <Stack spacing={2.5}>
