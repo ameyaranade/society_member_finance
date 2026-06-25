@@ -32,13 +32,14 @@ vitest_1.vi.mock('../lib/admin', () => ({
     db: mockDb,
     adminAuth: { getUser: vitest_1.vi.fn(), setCustomUserClaims: vitest_1.vi.fn() },
 }));
+vitest_1.vi.mock('../lib/audit', () => ({ writeAudit: vitest_1.vi.fn().mockResolvedValue(undefined) }));
 vitest_1.vi.mock('../lib/claims', () => ({ refreshUserClaims: vitest_1.vi.fn().mockResolvedValue({}) }));
 vitest_1.vi.mock('firebase-admin/app', () => ({ initializeApp: vitest_1.vi.fn() }));
 vitest_1.vi.mock('firebase-admin/firestore', () => ({
     FieldValue: { serverTimestamp: () => 'SERVER_TS', delete: () => 'DELETE' },
 }));
 vitest_1.vi.mock('firebase-functions/v2/https', () => ({
-    onCall: (_opts, handler) => handler,
+    onCall: (optsOrHandler, maybeHandler) => maybeHandler ?? optsOrHandler,
     HttpsError: class HttpsError extends Error {
         code;
         constructor(code, message) {

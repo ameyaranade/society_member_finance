@@ -4,7 +4,6 @@ import Gallery from './Gallery';
 import NotFound from './NotFound';
 import Forbidden from './Forbidden';
 import NoSociety from './NoSociety';
-import Placeholder from './Placeholder';
 import SignInPage from '../features/auth/SignInPage';
 import RequireAuth from '../features/auth/RequireAuth';
 import RequireSociety from '../features/auth/RequireSociety';
@@ -12,6 +11,8 @@ import MembersPage from '../features/admin/MembersPage';
 import SuperAdminPage from '../features/admin/SuperAdminPage';
 import SettingsPage from '../features/settings/SettingsPage';
 import PayablesPage from '../features/payables/PayablesPage';
+import ReceivablesPage from '../features/receivables/ReceivablesPage';
+import DashboardPage from '../features/dashboard/DashboardPage';
 
 export const router = createBrowserRouter(
   [
@@ -41,9 +42,9 @@ export const router = createBrowserRouter(
         </RequireAuth>
       ),
       children: [
-        { index: true,         element: <Placeholder name="Dashboard" /> },
+        { index: true,         element: <DashboardPage /> },
         { path: 'payables',    element: <PayablesPage /> },
-        { path: 'receivables', element: <Placeholder name="Receivables" /> },
+        { path: 'receivables', element: <ReceivablesPage /> },
         { path: 'members',     element: <MembersPage /> },
         { path: 'settings',    element: <SettingsPage /> },
         { path: '_gallery',    element: <Gallery /> },

@@ -8,24 +8,42 @@ import {
   Paper,
   Divider,
 } from '@mui/material';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '../../lib/firebase';
+import { callables } from '../../lib/callables';
 import { useAuth } from '../auth/useAuth';
 import RequireRole from '../auth/RequireRole';
 
-interface CreateSocietyInput {
-  societyId: string;
-  name: string;
-  address?: string;
-  registrationNo?: string;
-  totalUnits: number;
-  adminEmail: string;
-}
+const { createSociety: createSocietyFn, seedDashboardData: seedFn } = callables;
 
-const createSocietyFn = httpsCallable<CreateSocietyInput, { societyId: string }>(
-  functions,
-  'createSociety',
-);
+function SeedDataForm() {
+  const [societyId, setSocietyId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function handleSeed() {
+    if (!societyId.trim()) return;
+    setBusy(true); setMsg(null);
+    try {
+      const res = await seedFn({ societyId: societyId.trim() });
+      setMsg({ ok: true, text: `Seeded ${res.data.created} transactions across ${res.data.months} months.` });
+    } catch (e: unknown) {
+      setMsg({ ok: false, text: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Box display="flex" flexDirection="column" gap={2}>
+      {msg && <Alert severity={msg.ok ? 'success' : 'error'}>{msg.text}</Alert>}
+      <TextField label="Society ID" size="small" value={societyId}
+        onChange={e => setSocietyId(e.target.value)}
+        helperText="Transactions for Jan–Jun 2026 will be written to this society." />
+      <Button variant="outlined" disabled={busy || !societyId.trim()} onClick={handleSeed}>
+        {busy ? 'Seeding…' : 'Seed 6 months of sample transactions'}
+      </Button>
+    </Box>
+  );
+}
 
 function CreateSocietyForm() {
   const [form, setForm] = useState({
@@ -131,11 +149,19 @@ export default function SuperAdminPage() {
       </Typography>
 
       <Paper elevation={0} sx={{ p: 3, border: 1, borderColor: 'divider', borderRadius: 3 }}>
-        <Typography variant="h5" mb={2}>
-          New society
-        </Typography>
+        <Typography variant="h5" mb={2}>New society</Typography>
         <Divider sx={{ mb: 3 }} />
         <CreateSocietyForm />
+      </Paper>
+
+      <Paper elevation={0} sx={{ p: 3, mt: 3, border: 1, borderColor: 'divider', borderRadius: 3 }}>
+        <Typography variant="h5" mb={1}>Seed demo data</Typography>
+        <Typography variant="body2" color="text.secondary" mb={2}>
+          Writes 6 months of realistic sample transactions (income + expenses) for dashboard testing.
+          Safe to run multiple times — just adds more rows.
+        </Typography>
+        <Divider sx={{ mb: 3 }} />
+        <SeedDataForm />
       </Paper>
     </Box>
   );

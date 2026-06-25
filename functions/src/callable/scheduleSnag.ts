@@ -1,6 +1,8 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../lib/admin';
+import { requireCaller } from '../lib/context';
+import { requirePositivePaise } from '../lib/validate';
 import { writeAudit } from '../lib/audit';
 import type {
   BudgetWindow,
@@ -31,17 +33,8 @@ const VALID_PLAN_MODES  = new Set<BudgetWindow['mode']>([
   'month', 'quarter', 'year', 'custom', 'by_date',
 ]);
 
-export const scheduleSnag = onCall(
-  { region: 'asia-south1' },
-  async (request): Promise<{ requestId: string }> => {
-    const uid = request.auth?.uid;
-    if (!uid) throw new HttpsError('unauthenticated', 'Not signed in.');
-
-    const token     = request.auth?.token as Record<string, unknown> | undefined;
-    const societyId = token?.societyId as string | undefined;
-    const role      = token?.role as string | undefined;
-
-    if (!societyId) throw new HttpsError('failed-precondition', 'No active society.');
+export const scheduleSnag = onCall(async (request): Promise<{ requestId: string }> => {
+    const { uid, societyId, role } = requireCaller(request);
     if (role !== 'admin')
       throw new HttpsError('permission-denied', 'Only Admin can schedule a snag.');
 
@@ -58,8 +51,7 @@ export const scheduleSnag = onCall(
       throw new HttpsError('invalid-argument', 'Invalid category.');
     if (!VALID_FUND_HEADS.has(input.fundHead))
       throw new HttpsError('invalid-argument', 'Invalid fundHead.');
-    if (!Number.isInteger(input.estCostPaise) || input.estCostPaise <= 0)
-      throw new HttpsError('invalid-argument', 'estCostPaise must be a positive integer.');
+    requirePositivePaise(input.estCostPaise, 'estCostPaise');
 
     // Validate budget window (D9c)
     const plan = input.plan;

@@ -1,24 +1,16 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../lib/admin';
+import { assertSameSociety, requireCaller } from '../lib/context';
 import { writeAudit } from '../lib/audit';
-import { dispatchNotification } from '../lib/notify';
+import { dispatchNotificationSafe } from '../lib/notify';
 
 interface WithdrawExpenseRequestInput {
   requestId: string;
 }
 
-export const withdrawExpenseRequest = onCall(
-  { region: 'asia-south1' },
-  async (request): Promise<{ ok: true }> => {
-    const uid = request.auth?.uid;
-    if (!uid) throw new HttpsError('unauthenticated', 'Not signed in.');
-
-    const token     = request.auth?.token as Record<string, unknown> | undefined;
-    const societyId = token?.societyId as string | undefined;
-    const role      = token?.role as string | undefined;
-
-    if (!societyId) throw new HttpsError('failed-precondition', 'No active society.');
+export const withdrawExpenseRequest = onCall(async (request): Promise<{ ok: true }> => {
+    const { uid, societyId, role } = requireCaller(request);
     if (role !== 'fm' && role !== 'admin')
       throw new HttpsError('permission-denied', 'Only FM or Admin can withdraw a request.');
 
@@ -34,8 +26,7 @@ export const withdrawExpenseRequest = onCall(
 
     const data = requestSnap.data()!;
 
-    if (data.societyId !== societyId)
-      throw new HttpsError('permission-denied', 'Cross-society access denied.');
+    assertSameSociety(data.societyId as string, societyId);
     if (data.status === 'withdrawn')
       throw new HttpsError('failed-precondition', 'Request is already withdrawn.');
     if (data.status === 'completed')
@@ -66,12 +57,12 @@ export const withdrawExpenseRequest = onCall(
       after:  { status: 'withdrawn' },
     });
 
-    void dispatchNotification({
+    dispatchNotificationSafe({
       societyId,
       type: 'expense_request_withdrawn',
       toRole: 'mc',
       payload: { requestId, title: data.title as string, requestType: data.type as string },
-    }).catch(e => console.error('notify error:', e));
+    });
 
     return { ok: true };
   },

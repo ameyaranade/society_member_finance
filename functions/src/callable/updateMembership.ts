@@ -32,9 +32,7 @@ async function countActiveAdmins(societyId: string, excludeId?: string): Promise
  * Handles role changes + activation/deactivation.
  * Enforces: a society must always have at least one active admin.
  */
-export const updateMembership = onCall(
-  { region: 'asia-south1' },
-  async (request): Promise<{ ok: boolean }> => {
+export const updateMembership = onCall(async (request): Promise<{ ok: boolean }> => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be signed in.');
     }

@@ -9,8 +9,7 @@ import Button from '@mui/material/Button';
 import Alert from '@mui/material/Alert';
 import Divider from '@mui/material/Divider';
 import CircularProgress from '@mui/material/CircularProgress';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '../../lib/firebase';
+import { callables } from '../../lib/callables';
 import { formatMoney, toPaise } from '../../lib/money';
 import type { ExpenseCategory, ExpensePriority } from '../../types/requests';
 import type { FundCode } from '../../types/config';
@@ -44,7 +43,7 @@ const PLAN_MODES: { value: BudgetWindowMode; label: string }[] = [
   { value: 'by_date', label: 'By target date' },
 ];
 
-const scheduleSnagFn = httpsCallable<unknown, { requestId: string }>(functions, 'scheduleSnag');
+const { scheduleSnag: scheduleSnagFn } = callables;
 
 /** Build a BudgetWindow from mode + raw date inputs. */
 function computeWindow(mode: BudgetWindowMode, rawStart: string, rawEnd: string, rawLabel: string): BudgetWindowInput | null {

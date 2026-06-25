@@ -11,7 +11,7 @@ const VALID_ROLES = ['admin', 'mc', 'fm', 'resident'];
  * Creates a membership doc with status:'invited'.
  * The user activates it on first sign-in via refreshClaims.
  */
-exports.inviteUser = (0, https_1.onCall)({ region: 'asia-south1' }, async (request) => {
+exports.inviteUser = (0, https_1.onCall)(async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Must be signed in.');
     }

@@ -22,7 +22,7 @@ async function countActiveAdmins(societyId, excludeId) {
  * Handles role changes + activation/deactivation.
  * Enforces: a society must always have at least one active admin.
  */
-exports.updateMembership = (0, https_1.onCall)({ region: 'asia-south1' }, async (request) => {
+exports.updateMembership = (0, https_1.onCall)(async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Must be signed in.');
     }

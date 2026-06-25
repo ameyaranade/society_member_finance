@@ -17,3 +17,13 @@ export function formatMonthYear(date: Date | { toDate(): Date }, locale = 'en-IN
 export function toISODate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
+
+/** Safely extract milliseconds from a Firestore Timestamp or any unknown value. */
+export function tsMillis(v: unknown): number {
+  return (v as { toMillis?: () => number } | null)?.toMillis?.() ?? 0;
+}
+
+/** Safely extract a JS Date from a Firestore Timestamp or any unknown value. */
+export function tsToDate(v: unknown): Date | null {
+  return (v as { toDate?: () => Date } | null)?.toDate?.() ?? null;
+}

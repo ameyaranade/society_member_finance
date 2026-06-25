@@ -44,6 +44,12 @@ export const COLLECTIONS = {
   fundHeads:        (societyId: string) => `societies/${societyId}/fundHeads`,
   vendors:          (societyId: string) => `societies/${societyId}/vendors`,
   vendorRelations:  (societyId: string) => `societies/${societyId}/vendorRelations`,
+  // ── Receivables ──────────────────────────────────────────────────────────────
+  units:            (societyId: string) => `societies/${societyId}/units`,
+  collections:      (societyId: string) => `societies/${societyId}/collections`,
+  collectionEntries:(societyId: string, period: string) => `societies/${societyId}/collections/${period}/entries`,
+  vendorIncome:     (societyId: string) => `societies/${societyId}/vendorIncome`,
+  // ── Payables ─────────────────────────────────────────────────────────────────
   recurringPayments:  (societyId: string) => `societies/${societyId}/recurringPayments`,
   recurringInstances: (societyId: string) => `societies/${societyId}/recurringInstances`,
   expenseRequests:    (societyId: string) => `societies/${societyId}/expenseRequests`,
@@ -51,6 +57,7 @@ export const COLLECTIONS = {
   approvals:   (societyId: string, requestId: string) => `societies/${societyId}/expenseRequests/${requestId}/approvals`,
   requestNotes:(societyId: string, requestId: string) => `societies/${societyId}/expenseRequests/${requestId}/notes`,
   disbursements:(societyId: string, requestId: string) => `societies/${societyId}/expenseRequests/${requestId}/disbursements`,
+  // ── Ledger ───────────────────────────────────────────────────────────────────
   transactions:     (societyId: string) => `societies/${societyId}/transactions`,
   balances:         (societyId: string) => `societies/${societyId}/balances`,
   notifications:    (societyId: string) => `societies/${societyId}/notifications`,

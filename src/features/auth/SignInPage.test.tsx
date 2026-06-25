@@ -10,6 +10,9 @@ vi.mock('firebase/auth', () => ({
   sendPasswordResetEmail: vi.fn(),
 }));
 vi.mock('../../lib/firebase', () => ({ auth: {} }));
+vi.mock('./useAuth', () => ({
+  useAuth: vi.fn(() => ({ user: null, loading: false })),
+}));
 
 function renderPage() {
   return render(

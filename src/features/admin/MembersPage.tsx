@@ -20,22 +20,13 @@ import {
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import { httpsCallable } from 'firebase/functions';
 import { useTranslation } from 'react-i18next';
-import { functions } from '../../lib/firebase';
+import { callables } from '../../lib/callables';
 import { useAuth } from '../auth/useAuth';
 import { useMemberships } from './useMemberships';
 import type { Role } from '../../types/auth';
 
-const inviteUserFn = httpsCallable<
-  { email: string; role: Role; societyId: string },
-  { membershipId: string }
->(functions, 'inviteUser');
-
-const updateMembershipFn = httpsCallable<
-  { membershipId: string; role?: Role; status?: 'active' | 'deactivated' },
-  { ok: boolean }
->(functions, 'updateMembership');
+const { inviteUser: inviteUserFn, updateMembership: updateMembershipFn } = callables;
 
 const ROLES: { value: Role; label: string }[] = [
   { value: 'admin', label: 'Admin' },

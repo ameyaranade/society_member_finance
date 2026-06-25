@@ -17,9 +17,7 @@ const VALID_ROLES: Role[] = ['admin', 'mc', 'fm', 'resident'];
  * Creates a membership doc with status:'invited'.
  * The user activates it on first sign-in via refreshClaims.
  */
-export const inviteUser = onCall(
-  { region: 'asia-south1' },
-  async (request): Promise<{ membershipId: string }> => {
+export const inviteUser = onCall(async (request): Promise<{ membershipId: string }> => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be signed in.');
     }

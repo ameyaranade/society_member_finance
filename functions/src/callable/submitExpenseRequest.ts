@@ -1,9 +1,11 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../lib/admin';
+import { assertSameSociety, requireCaller } from '../lib/context';
+import { requirePositivePaise } from '../lib/validate';
 import { writeAudit } from '../lib/audit';
-import { dispatchNotification } from '../lib/notify';
-import { fetchApprovalTiers, resolveTier, getActiveMCCount } from '../lib/tierHelpers';
+import { dispatchNotificationSafe } from '../lib/notify';
+import { resolveRequiredApprovers } from '../lib/tierHelpers';
 import type { Quotation } from '../lib/types';
 
 interface QuotationInput {
@@ -18,17 +20,8 @@ interface SubmitExpenseRequestInput {
   quotations: QuotationInput[]; // required for snag take-up
 }
 
-export const submitExpenseRequest = onCall(
-  { region: 'asia-south1' },
-  async (request): Promise<{ ok: true }> => {
-    const uid = request.auth?.uid;
-    if (!uid) throw new HttpsError('unauthenticated', 'Not signed in.');
-
-    const token     = request.auth?.token as Record<string, unknown> | undefined;
-    const societyId = token?.societyId as string | undefined;
-    const role      = token?.role as string | undefined;
-
-    if (!societyId) throw new HttpsError('failed-precondition', 'No active society.');
+export const submitExpenseRequest = onCall(async (request): Promise<{ ok: true }> => {
+    const { uid, societyId, role } = requireCaller(request);
     if (role !== 'fm')
       throw new HttpsError('permission-denied', 'Only FM can take up a request.');
 
@@ -41,8 +34,7 @@ export const submitExpenseRequest = onCall(
     for (const q of input.quotations) {
       if (!q.vendorId?.trim())
         throw new HttpsError('invalid-argument', 'Each quotation must have a vendorId.');
-      if (!Number.isInteger(q.amountPaise) || q.amountPaise <= 0)
-        throw new HttpsError('invalid-argument', 'Each quotation amountPaise must be a positive integer.');
+      requirePositivePaise(q.amountPaise, 'amountPaise');
       if (!q.scopeNotes?.trim())
         throw new HttpsError('invalid-argument', 'Each quotation must have scopeNotes.');
     }
@@ -56,32 +48,14 @@ export const submitExpenseRequest = onCall(
 
     const data = requestSnap.data()!;
 
-    if (data.societyId !== societyId)
-      throw new HttpsError('permission-denied', 'Cross-society access denied.');
+    assertSameSociety(data.societyId as string, societyId);
     if (data.type !== 'snag')
       throw new HttpsError('invalid-argument', 'submitExpenseRequest is for snag take-up only.');
     if (data.status !== 'scheduled')
       throw new HttpsError('failed-precondition', `Cannot take up a snag in status "${data.status}".`);
 
     // ── Tier resolution + quorum check (D9) ─────────────────────────────────
-    const [tiers, activeMCCount] = await Promise.all([
-      fetchApprovalTiers(societyId),
-      getActiveMCCount(societyId),
-    ]);
-
-    let requiredApprovers: number;
-    try {
-      requiredApprovers = resolveTier(data.estCostPaise as number, tiers);
-    } catch (e: unknown) {
-      throw new HttpsError('failed-precondition', e instanceof Error ? e.message : 'Tier error.');
-    }
-
-    if (requiredApprovers > activeMCCount) {
-      throw new HttpsError(
-        'failed-precondition',
-        `This request needs ${requiredApprovers} MC approver(s) but the society only has ${activeMCCount} active MC member(s).`,
-      );
-    }
+    const requiredApprovers = await resolveRequiredApprovers(societyId, data.estCostPaise as number);
 
     // ── Write atomically ─────────────────────────────────────────────────────
     const batch = db.batch();
@@ -119,12 +93,12 @@ export const submitExpenseRequest = onCall(
       after: { status: 'requested', requiredApprovers },
     });
 
-    void dispatchNotification({
+    dispatchNotificationSafe({
       societyId,
       type: 'expense_request_submitted',
       toRole: 'mc',
       payload: { requestId: input.requestId, title: data.title as string, requestType: 'snag' },
-    }).catch(e => console.error('notify error:', e));
+    });
 
     return { ok: true };
   },

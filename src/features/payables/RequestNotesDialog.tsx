@@ -14,6 +14,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Divider from '@mui/material/Divider';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../auth/useAuth';
+import { tsMillis } from '../../lib/date';
 
 interface Note {
   id: string;
@@ -25,8 +26,7 @@ interface Note {
 }
 
 function formatNoteDate(ts: unknown): string {
-  if (!ts) return '';
-  const millis = (ts as { toMillis?: () => number }).toMillis?.();
+  const millis = tsMillis(ts);
   if (!millis) return '';
   return new Intl.DateTimeFormat('en-IN', {
     day: 'numeric', month: 'short', year: 'numeric',
@@ -57,11 +57,7 @@ export default function RequestNotesDialog({ requestId, title, isMC, onClose }: 
     return onSnapshot(q, snap => {
       const docs = snap.docs
         .map(d => ({ id: d.id, ...d.data() } as Note))
-        .sort((a, b) => {
-          const ta = (a.createdAt as { toMillis?: () => number })?.toMillis?.() ?? 0;
-          const tb = (b.createdAt as { toMillis?: () => number })?.toMillis?.() ?? 0;
-          return ta - tb;
-        });
+        .sort((a, b) => tsMillis(a.createdAt) - tsMillis(b.createdAt));
       setNotes(docs);
       setLoading(false);
     }, () => setLoading(false));

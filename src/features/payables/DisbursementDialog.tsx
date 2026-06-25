@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { httpsCallable } from 'firebase/functions';
+import { callables } from '../../lib/callables';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -13,7 +13,6 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
 import Divider from '@mui/material/Divider';
-import { functions } from '../../lib/firebase';
 import { useAccounts } from '../settings/useAccounts';
 import { formatMoney } from '../../lib/money';
 import type { ExpenseRequest } from '../../types/requests';
@@ -29,17 +28,7 @@ const MODES: { value: PaymentMode; label: string }[] = [
   { value: 'bank',   label: 'Bank transfer' },
 ];
 
-const disbFn = httpsCallable<{
-  requestId: string;
-  amountPaise: number;
-  accountId: string;
-  kind: DisbKind;
-  paymentMode: PaymentMode;
-  referenceNo?: string;
-  paidAt: string;
-  notes?: string;
-  invoiceRef?: string;
-}, { ok: true; txnId: string; disbId: string }>(functions, 'recordDisbursement');
+const { recordDisbursement: disbFn } = callables;
 
 function todayISO(): string {
   const d = new Date();

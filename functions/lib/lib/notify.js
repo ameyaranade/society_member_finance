@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.dispatchNotification = dispatchNotification;
+exports.dispatchNotificationSafe = dispatchNotificationSafe;
 const firestore_1 = require("firebase-admin/firestore");
 const admin_1 = require("./admin");
 /**
@@ -39,4 +40,11 @@ async function dispatchNotification(params) {
     }
     await batch.commit();
     // Email stub — transactional email to be implemented in a later phase
+}
+/**
+ * Fire-and-forget wrapper — notification failure must never block the main operation.
+ * Call sites use this instead of inlining void dispatchNotification(...).catch(...).
+ */
+function dispatchNotificationSafe(params) {
+    void dispatchNotification(params).catch(e => console.error('notify error:', e));
 }

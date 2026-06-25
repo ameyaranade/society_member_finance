@@ -4,33 +4,25 @@ exports.recordDisbursement = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const admin_1 = require("../lib/admin");
+const context_1 = require("../lib/context");
+const transactions_1 = require("../lib/transactions");
+const validate_1 = require("../lib/validate");
 const audit_1 = require("../lib/audit");
 const notify_1 = require("../lib/notify");
-const VALID_MODES = new Set(['cash', 'upi', 'cheque', 'bank']);
-exports.recordDisbursement = (0, https_1.onCall)({ region: 'asia-south1' }, async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid)
-        throw new https_1.HttpsError('unauthenticated', 'Not signed in.');
-    const token = request.auth?.token;
-    const societyId = token?.societyId;
-    const role = token?.role;
-    if (!societyId)
-        throw new https_1.HttpsError('failed-precondition', 'No active society.');
+exports.recordDisbursement = (0, https_1.onCall)(async (request) => {
+    const { uid, societyId, role } = (0, context_1.requireCaller)(request);
     if (role !== 'fm')
         throw new https_1.HttpsError('permission-denied', 'Only FM can record disbursements.');
     const input = request.data;
     if (!input.requestId?.trim())
         throw new https_1.HttpsError('invalid-argument', 'requestId is required.');
-    if (!Number.isInteger(input.amountPaise) || input.amountPaise <= 0)
-        throw new https_1.HttpsError('invalid-argument', 'amountPaise must be a positive integer.');
+    (0, validate_1.requirePositivePaise)(input.amountPaise, 'amountPaise');
     if (!input.accountId?.trim())
         throw new https_1.HttpsError('invalid-argument', 'accountId is required.');
     if (input.kind !== 'partial' && input.kind !== 'final')
         throw new https_1.HttpsError('invalid-argument', 'kind must be "partial" or "final".');
-    if (!VALID_MODES.has(input.paymentMode))
-        throw new https_1.HttpsError('invalid-argument', 'paymentMode must be cash, upi, cheque, or bank.');
-    if (!input.paidAt?.match(/^\d{4}-\d{2}-\d{2}$/))
-        throw new https_1.HttpsError('invalid-argument', 'paidAt must be "YYYY-MM-DD".');
+    (0, validate_1.requirePaymentMode)(input.paymentMode, 'paymentMode');
+    (0, validate_1.requireDateString)(input.paidAt, 'paidAt');
     const requestRef = admin_1.db.doc(`societies/${societyId}/expenseRequests/${input.requestId}`);
     const accountRef = admin_1.db.doc(`societies/${societyId}/accounts/${input.accountId}`);
     // Pre-read account outside transaction (just for existence check — low-contention)
@@ -48,8 +40,7 @@ exports.recordDisbursement = (0, https_1.onCall)({ region: 'asia-south1' }, asyn
         if (!reqSnap.exists)
             throw new https_1.HttpsError('not-found', 'Expense request not found.');
         const data = reqSnap.data();
-        if (data.societyId !== societyId)
-            throw new https_1.HttpsError('permission-denied', 'Cross-society access denied.');
+        (0, context_1.assertSameSociety)(data.societyId, societyId);
         // D9e spend gate — only approved or disbursed requests can receive disbursement
         if (data.status !== 'approved' && data.status !== 'disbursed')
             throw new https_1.HttpsError('failed-precondition', `Cannot disburse: request is "${data.status}", must be "approved" or "disbursed".`);
@@ -62,10 +53,8 @@ exports.recordDisbursement = (0, https_1.onCall)({ region: 'asia-south1' }, asyn
                 `Approved: ${approvedAmount} paise, already disbursed: ${alreadyDisbursed} paise, ` +
                 `requested: ${input.amountPaise} paise.`);
         // Write transaction doc (triggers recomputeBalances)
-        const txnData = {
-            id: txnId,
-            societyId,
-            direction: 'out',
+        const txnData = (0, transactions_1.buildTransaction)({
+            txnId, societyId, direction: 'out',
             amountPaise: input.amountPaise,
             accountId: input.accountId,
             fundHead: data.fundHead,
@@ -75,12 +64,9 @@ exports.recordDisbursement = (0, https_1.onCall)({ region: 'asia-south1' }, asyn
             sourceType: 'expenseRequest',
             sourceId: input.requestId,
             createdBy: uid,
-            createdAt: firestore_1.FieldValue.serverTimestamp(),
-        };
-        if (input.referenceNo?.trim())
-            txnData.referenceNo = input.referenceNo.trim();
-        if (input.notes?.trim())
-            txnData.notes = input.notes.trim();
+            referenceNo: input.referenceNo,
+            notes: input.notes,
+        });
         txn.set(txnRef, txnData);
         // Write disbursement subdoc
         const disbData = {
@@ -117,11 +103,11 @@ exports.recordDisbursement = (0, https_1.onCall)({ region: 'asia-south1' }, asyn
             txnId,
         },
     });
-    void (0, notify_1.dispatchNotification)({
+    (0, notify_1.dispatchNotificationSafe)({
         societyId,
         type: 'expense_request_disbursed',
         toRole: 'admin',
         payload: { requestId: input.requestId, title: requestTitle, amountPaise: input.amountPaise },
-    }).catch(e => console.error('notify error:', e));
+    });
     return { ok: true, txnId, disbId };
 });

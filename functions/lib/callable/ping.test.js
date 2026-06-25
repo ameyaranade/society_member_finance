@@ -35,7 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 const vitest_1 = require("vitest");
 vitest_1.vi.mock('firebase-functions/v2/https', () => ({
-    onCall: vitest_1.vi.fn((_opts, handler) => handler),
+    onCall: vitest_1.vi.fn((optsOrHandler, maybeHandler) => (maybeHandler ?? optsOrHandler)),
 }));
 vitest_1.vi.mock('firebase-admin/app', () => ({ initializeApp: vitest_1.vi.fn() }));
 (0, vitest_1.describe)('ping handler', () => {

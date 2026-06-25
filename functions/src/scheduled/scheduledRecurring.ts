@@ -81,7 +81,7 @@ async function generateForSociety(societyId: string, period: string): Promise<nu
 
 /** Cron: runs at 00:00 IST on the 1st of every month. */
 export const scheduledRecurring = onSchedule(
-  { schedule: '0 0 1 * *', timeZone: 'Asia/Kolkata', region: 'asia-south1' },
+  { schedule: '0 0 1 * *', timeZone: 'Asia/Kolkata' },
   async () => {
     const period = currentPeriodIST();
     const societiesSnap = await db.collection('societies').get();
@@ -96,7 +96,6 @@ export const scheduledRecurring = onSchedule(
 
 /** Admin callable: generate instances for a specific society + period (for testing/backfill). */
 export const generateRecurringInstances = onCall(
-  { region: 'asia-south1' },
   async (request) => {
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError('unauthenticated', 'Not signed in.');

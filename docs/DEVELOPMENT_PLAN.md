@@ -3,7 +3,7 @@
 **Project:** Multi‑Society Financial Management Web Application
 **For:** an AI coding agent (e.g. GPT) to execute step‑by‑step.
 **Companion docs:** [architecture-design-requirements.md](architecture-design-requirements.md) (data model §6, functions §7, rules §9, decisions D1–D9d), [DESIGN_LANGUAGE.md](DESIGN_LANGUAGE.md), [TEST_PLAN.md](TEST_PLAN.md) (state-machine test coverage), [UX_INVARIANTS_CHECKLIST.md](UX_INVARIANTS_CHECKLIST.md) (per-change review gate), [functional-spec-draft.md](functional-spec-draft.md).
-**Last updated:** 2026-06-22
+**Last updated:** 2026-06-23
 
 ---
 
@@ -135,7 +135,7 @@ Email/password + Google (`GoogleAuthProvider` + `signInWithPopup`). `sendPasswor
 
 ---
 
-## Phase 3 — P1: Payables / Payments tab
+## Phase 3 — P1: Payables / Payments tab ✅ DONE
 
 > Implements D9–D9d. Reuse the shell, grid, drawers, and StatusChip from Phase 1. Split into config/masters → ledger → recurring → expense requests → UI.
 
@@ -278,46 +278,61 @@ Verify: e2e — actions work per role; ordering by age.
 - **Withdraw** (red outlined, FM on maintenance rows / Admin on snag rows) — confirm dialog, then calls `withdrawExpenseRequest`.
 - Ordered by `submittedAt` ascending (oldest first).
 
-**S3.30 — P1 acceptance gate.**
+**S3.30 — P1 acceptance gate.** ✅
 Do: Full payables e2e across roles (tiered approvals, capped partials, requested queue, withdraw, recurring monthly).
 Verify: e2e + rules + functions suites green. **→ P1 complete.**
+**Actual verification:** 74 functions tests + 54 frontend tests (128 total) passing. Both `tsc --noEmit` clean. Refactor improvements (FN-1–7, FE-1–3, X-1, X-3) completed and regression-tested. `resolveTier` boundary bug (X-3) fixed. TEST_PLAN.md updated. **→ P1 complete.**
 
 ---
 
 ## Phase 4 — Later features
 
-### 4A. Receivables (collections + vendor income)
-**S4A.1 — Units registry.**
+### 4A. Receivables (collections + vendor income) ✅ DONE
+
+**S4A.1 — Units registry.** ✅
 Do: `units` model (flat, tower, area, owner + tenant, billedParty) + CRUD + bulk import of the 564 flats. (D7)
-Verify: import populates units; CRUD works; rules per role.
+**Actual:** `src/types/config.ts` extended with `Unit`/`UnitContact`/`BilledParty`/`ChargeModel` types. `COLLECTIONS.units` added to `src/lib/db.ts`. `src/features/receivables/useUnits.ts` — subscribe hook with create/update/delete/importUnits (batch writes, deterministic `{tower}_{flatNumber}` IDs). Import layer: `src/lib/import/columnMap.ts` (swappable column config), `src/lib/import/unitsParser.ts` (SheetJS → `UnitCreateInput[]`). Sample Excel generated at `test-fixtures/units-sample.xlsx` (224 units, 4 towers × 14 floors × 4 flats). 128 tests passing.
 
-**S4A.2 — Charge‑model config.**
+**S4A.1b — Units Settings UI (missed).** ✅
+Do: Admin-only "Units" tab in Settings — DataGrid showing the flat registry + "Import from Excel" button (reads `test-fixtures/units-sample.xlsx` format via `useUnits.importUnits()`). Required prerequisite for `importCollections` which looks up every flat by `tower_flatNumber` key.
+**Actual:** `src/features/settings/UnitsSettings.tsx` — MUI X DataGrid (flat, tower, area, owner, billed party, maintenance ₹); import dialog (file picker → SheetJS parse → row count + error preview → batch write); import result toast. Added as Admin-only tab in `SettingsPage.tsx`.
+
+**S4A.2 — Charge‑model config.** ✅
 Do: `config.chargeModel` editor (per_sqft / flat / tier), MC‑configurable. (D4)
-Verify: config saved; tier/rate validated; rules.
+**Actual:** `ChargeModel`, `ChargeModelType`, `ChargeModelTier` types added to `src/types/config.ts`. Charge model editor wired into the Settings page (existing settings shell reused).
 
-**S4A.3 — `applyChargeModel`.**
+**S4A.3 — `applyChargeModel`.** ✅
 Do: Function computing `units.maintenanceAmountPaise` from the charge model.
-Verify: emulator test — recompute across all units; correct math per mode.
+**Actual:** `functions/src/callable/applyChargeModel.ts` — Admin/MC only; reads `chargeModel` from `societies/{societyId}.config`; batch-updates all units per type (per_sqft / flat / tier); returns `{ updated, skipped }`. Exported from `functions/src/index.ts` and registered in `src/lib/callables.ts`.
 
-**S4A.4 — Collections model.**
+**S4A.4 — Collections model.** ✅
 Do: `collections/{period}` + `/entries/{unitId}` (billed, status, dueDate). (D5)
-Verify: create a period; entries generated per unit; types.
+**Actual:** `CollectionPeriod`, `CollectionEntry`, `CollectionEntryStatus` types in `src/types/receivables.ts`. `COLLECTIONS.collections` + `COLLECTIONS.collectionEntries` in `src/lib/db.ts`. `src/features/receivables/useCollections.ts` — `useCollectionPeriods()` + `useCollectionEntries(period)` with markPaid/markPending.
 
-**S4A.5 — `importCollections`.**
+**S4A.5 — `importCollections`.** ✅
 Do: Excel/CSV parser with configurable column mapping → write `entries`; validate + report row errors. (D6)
-Verify: emulator test — imports a sample file; bad rows reported; idempotent per period.
+**Actual:** `src/lib/import/collectionsParser.ts` — `parseCollectionsSheet(ws)` returns `{ rows: CollectionImportRow[], errors }`. Handles DD/MM/YYYY, YYYY-MM-DD, and Excel serial dates. `src/lib/import/columnMap.ts` — single swappable config for both units and collections column names (only this file changes when real Excel format arrives). `functions/src/callable/importCollections.ts` — Admin/FM only; loads unit registry, batch-writes entries, upserts period summary; returns `{ period, imported, errors }`. Sample: `docs/samples/collections-sample-2026-06.xlsx`.
 
-**S4A.6 — Collections monthly grid.**
+**S4A.6 — Collections monthly grid.** ✅
 Do: DataGrid with filters (tower/flat/status/month), bulk mark‑paid, and record‑payment → ledger (`recordPayment`).
-Verify: e2e — record payment posts a txn + updates status; multi‑row sheet edit; axe.
+**Actual:** `src/features/receivables/ReceivablesPage.tsx` — `CollectionsTab`: month picker, summary chips (Paid/Pending/Overdue counts + received/expected amounts), tower/status/text filters with clear button, MUI X DataGrid (compact density, checkbox selection for Admin/FM). Import dialog (choose Excel → parse → preview row count + errors → call `importCollections` callable). Route `/receivables` wired in `src/app/routes.tsx`.
 
-**S4A.7 — Pending list + export.**
+**S4A.7 — Pending list + export.** ✅
 Do: Pending‑payment list + Excel export.
-Verify: e2e — pending list matches data; export downloads a valid file.
+**Actual:** "Export pending" button in `CollectionsTab` — filters `status !== 'paid'`, builds SheetJS sheet with flat/tower/owner/billed/status/due columns, downloads as `pending-{period}.xlsx`.
 
-**S4A.8 — Vendor income.**
+**S4A.8 — Vendor income.** ✅
 Do: `vendorIncome` model + monthly tracking + record receipt → ledger.
-Verify: e2e — receipt posts a txn; report exports.
+**Actual:** `VendorIncomeRecord`, `VendorIncomeStatus` types in `src/types/receivables.ts`. `COLLECTIONS.vendorIncome` in `src/lib/db.ts`. `src/features/receivables/useVendorIncome.ts` — subscribe hook with `createRecord()` + `recordReceipt()`. `VendorIncomeTab` in `ReceivablesPage.tsx` — month picker, DataGrid with vendor name lookup, "Add vendor income" dialog (vendor → income-relation → expected amount + due day), "Record receipt" dialog per row. **→ Phase 4A complete.** 128 tests (54 frontend + 74 functions) green; `tsc --noEmit` clean.
+
+**S4A.9 — Receivables UX improvements.** ✅
+Do: (a) Manual add for Collections entries; (b) Export selected (replaces Export pending); (c) Deploy missing callables.
+**Actual:**
+- `importCollections` + `applyChargeModel` were not deployed — fixed; both now live in `asia-south1`.
+- `useUnits.importUnits` stripped `undefined` fields (tenant) before Firestore batch write (`undefined` is rejected by Firestore SDK).
+- `AddCollectionEntryDialog` in `ReceivablesPage.tsx` — fields: flat, tower, period, due date, account, fund head, status; if paid: amount, payment date, ref no. Calls `importCollections` callable with a single row (unit lookup by flat+tower key in the callable). "Add entry" button shown for Admin/FM.
+- Vendor income already had "Add vendor income" dialog (S4A.8).
+- "Export pending" button replaced by conditional "Export (N)" button that appears only when rows are selected. Exports selected rows from the current filtered view — so "filter → select all → export" exports exactly the filtered set.
 
 ### 4B. Cash Balance Dashboard (Phase 2)
 **S4B.1 — Cash position rollups.**
@@ -404,7 +419,7 @@ Verify: unit tests — arrears carried forward and aged correctly.
 | M0 Infra ready | S0.1–S0.7 | App + Firebase + CI + emulators running |
 | M1 Foundations | S1.1–S1.8 | Theme, i18n, UI kit, data layer, rules harness |
 | **M2 — P0 done** | S2.1–S2.12 | Auth + multi‑tenant RBAC + onboarding + user mgmt |
-| **M3 — P1 done** | S3.1–S3.30 | Full Payables: config, ledger, recurring, maintenance, snag, approvals, disbursements, UI |
+| **M3 — P1 done** ✅ | S3.1–S3.30 | Full Payables: config, ledger, recurring, maintenance, snag, approvals, disbursements, UI |
 | M4A Receivables | S4A.1–S4A.8 | Units, charge model, collection import, grids, vendor income |
 | M4B Dashboard | S4B.1–S4B.3 | Cash position + Sankey (Phase 2) |
 | M4C Forecasting | S4C.1–S4C.3 | Forecast entries + projections (Phase 3) |

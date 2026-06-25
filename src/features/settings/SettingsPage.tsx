@@ -9,6 +9,7 @@ import FundHeadsSettings from './FundHeadsSettings';
 import ApprovalTiersSettings from './ApprovalTiersSettings';
 import VendorsSettings from './VendorsSettings';
 import RecurringSettings from './RecurringSettings';
+import UnitsSettings from './UnitsSettings';
 import { useAuth } from '../auth/useAuth';
 
 const ALL_TABS = [
@@ -18,6 +19,7 @@ const ALL_TABS = [
   { label: 'Approval tiers', component: <ApprovalTiersSettings />,  roles: null }, // all
   { label: 'Vendors',        component: <VendorsSettings />,        roles: null }, // all members can read
   { label: 'Recurring',      component: <RecurringSettings />,      roles: null }, // all members can read
+  { label: 'Units',          component: <UnitsSettings />,          roles: ['admin'] },
 ];
 
 export default function SettingsPage() {

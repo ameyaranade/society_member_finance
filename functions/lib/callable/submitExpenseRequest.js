@@ -4,18 +4,13 @@ exports.submitExpenseRequest = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const admin_1 = require("../lib/admin");
+const context_1 = require("../lib/context");
+const validate_1 = require("../lib/validate");
 const audit_1 = require("../lib/audit");
 const notify_1 = require("../lib/notify");
 const tierHelpers_1 = require("../lib/tierHelpers");
-exports.submitExpenseRequest = (0, https_1.onCall)({ region: 'asia-south1' }, async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid)
-        throw new https_1.HttpsError('unauthenticated', 'Not signed in.');
-    const token = request.auth?.token;
-    const societyId = token?.societyId;
-    const role = token?.role;
-    if (!societyId)
-        throw new https_1.HttpsError('failed-precondition', 'No active society.');
+exports.submitExpenseRequest = (0, https_1.onCall)(async (request) => {
+    const { uid, societyId, role } = (0, context_1.requireCaller)(request);
     if (role !== 'fm')
         throw new https_1.HttpsError('permission-denied', 'Only FM can take up a request.');
     const input = request.data;
@@ -26,8 +21,7 @@ exports.submitExpenseRequest = (0, https_1.onCall)({ region: 'asia-south1' }, as
     for (const q of input.quotations) {
         if (!q.vendorId?.trim())
             throw new https_1.HttpsError('invalid-argument', 'Each quotation must have a vendorId.');
-        if (!Number.isInteger(q.amountPaise) || q.amountPaise <= 0)
-            throw new https_1.HttpsError('invalid-argument', 'Each quotation amountPaise must be a positive integer.');
+        (0, validate_1.requirePositivePaise)(q.amountPaise, 'amountPaise');
         if (!q.scopeNotes?.trim())
             throw new https_1.HttpsError('invalid-argument', 'Each quotation must have scopeNotes.');
     }
@@ -37,27 +31,13 @@ exports.submitExpenseRequest = (0, https_1.onCall)({ region: 'asia-south1' }, as
     if (!requestSnap.exists)
         throw new https_1.HttpsError('not-found', 'Expense request not found.');
     const data = requestSnap.data();
-    if (data.societyId !== societyId)
-        throw new https_1.HttpsError('permission-denied', 'Cross-society access denied.');
+    (0, context_1.assertSameSociety)(data.societyId, societyId);
     if (data.type !== 'snag')
         throw new https_1.HttpsError('invalid-argument', 'submitExpenseRequest is for snag take-up only.');
     if (data.status !== 'scheduled')
         throw new https_1.HttpsError('failed-precondition', `Cannot take up a snag in status "${data.status}".`);
     // ── Tier resolution + quorum check (D9) ─────────────────────────────────
-    const [tiers, activeMCCount] = await Promise.all([
-        (0, tierHelpers_1.fetchApprovalTiers)(societyId),
-        (0, tierHelpers_1.getActiveMCCount)(societyId),
-    ]);
-    let requiredApprovers;
-    try {
-        requiredApprovers = (0, tierHelpers_1.resolveTier)(data.estCostPaise, tiers);
-    }
-    catch (e) {
-        throw new https_1.HttpsError('failed-precondition', e instanceof Error ? e.message : 'Tier error.');
-    }
-    if (requiredApprovers > activeMCCount) {
-        throw new https_1.HttpsError('failed-precondition', `This request needs ${requiredApprovers} MC approver(s) but the society only has ${activeMCCount} active MC member(s).`);
-    }
+    const requiredApprovers = await (0, tierHelpers_1.resolveRequiredApprovers)(societyId, data.estCostPaise);
     // ── Write atomically ─────────────────────────────────────────────────────
     const batch = admin_1.db.batch();
     batch.update(requestRef, {
@@ -89,11 +69,11 @@ exports.submitExpenseRequest = (0, https_1.onCall)({ region: 'asia-south1' }, as
         targetId: input.requestId,
         after: { status: 'requested', requiredApprovers },
     });
-    void (0, notify_1.dispatchNotification)({
+    (0, notify_1.dispatchNotificationSafe)({
         societyId,
         type: 'expense_request_submitted',
         toRole: 'mc',
         payload: { requestId: input.requestId, title: data.title, requestType: 'snag' },
-    }).catch(e => console.error('notify error:', e));
+    });
     return { ok: true };
 });

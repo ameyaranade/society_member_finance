@@ -17,12 +17,13 @@ const { mockMembershipGet, mockMembershipSet, mockDb } = vi.hoisted(() => {
 });
 
 vi.mock('../lib/admin', () => ({ db: mockDb, adminAuth: {} }));
+vi.mock('../lib/audit', () => ({ writeAudit: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('firebase-admin/app', () => ({ initializeApp: vi.fn() }));
 vi.mock('firebase-admin/firestore', () => ({
   FieldValue: { serverTimestamp: () => 'SERVER_TS', delete: () => 'DELETE' },
 }));
 vi.mock('firebase-functions/v2/https', () => ({
-  onCall: (_opts: unknown, handler: unknown) => handler,
+  onCall: (optsOrHandler: unknown, maybeHandler?: unknown) => maybeHandler ?? optsOrHandler,
   HttpsError: class HttpsError extends Error {
     constructor(public code: string, message: string) { super(message); }
   },

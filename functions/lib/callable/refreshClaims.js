@@ -13,7 +13,7 @@ const audit_1 = require("../lib/audit");
  * 3. Recomputes and sets custom claims.
  * 4. Returns the new claims so the client can force-refresh the token.
  */
-exports.refreshClaims = (0, https_1.onCall)({ region: 'asia-south1' }, async (request) => {
+exports.refreshClaims = (0, https_1.onCall)(async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Must be signed in.');
     }

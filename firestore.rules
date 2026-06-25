@@ -150,6 +150,33 @@ service cloud.firestore {
         allow write: if hasRole(societyId, 'admin');
       }
 
+      // Units registry — Admin manages; all members read
+      match /units/{unitId} {
+        allow read:  if isMember(societyId);
+        allow write: if hasRole(societyId, 'admin');
+      }
+
+      // Collection periods (summary docs) — importCollections callable writes; Admin/FM read
+      match /collections/{period} {
+        allow read:  if isAdminOrFM(societyId);
+        allow write: if false;  // importCollections callable only
+
+        // Collection entries — Admin/FM can mark paid/pending; importCollections callable writes
+        match /entries/{entryId} {
+          allow read:   if isAdminOrFM(societyId);
+          allow update: if isAdminOrFM(societyId);
+          allow create, delete: if false;  // importCollections callable only
+        }
+      }
+
+      // Vendor income — Admin/FM create + update; Admin/FM read
+      match /vendorIncome/{incomeId} {
+        allow read:   if isAdminOrFM(societyId);
+        allow create: if isAdminOrFM(societyId);
+        allow update: if isAdminOrFM(societyId);
+        allow delete: if false;
+      }
+
       // Notifications — Functions-only writes; each user reads and marks their own
       match /notifications/{notificationId} {
         allow read:   if isMember(societyId) && request.auth.uid == resource.data.toUid;

@@ -1,25 +1,17 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../lib/admin';
+import { assertSameSociety, requireCaller } from '../lib/context';
 import { writeAudit } from '../lib/audit';
-import { dispatchNotification } from '../lib/notify';
+import { dispatchNotificationSafe } from '../lib/notify';
 
 interface RecordApprovalInput {
   requestId: string;
   note?: string;
 }
 
-export const recordApproval = onCall(
-  { region: 'asia-south1' },
-  async (request): Promise<{ ok: true; approved: boolean }> => {
-    const uid = request.auth?.uid;
-    if (!uid) throw new HttpsError('unauthenticated', 'Not signed in.');
-
-    const token     = request.auth?.token as Record<string, unknown> | undefined;
-    const societyId = token?.societyId as string | undefined;
-    const role      = token?.role as string | undefined;
-
-    if (!societyId) throw new HttpsError('failed-precondition', 'No active society.');
+export const recordApproval = onCall(async (request): Promise<{ ok: true; approved: boolean }> => {
+    const { uid, societyId, role } = requireCaller(request);
     if (role !== 'mc')
       throw new HttpsError('permission-denied', 'Only MC members can approve requests.');
 
@@ -38,8 +30,7 @@ export const recordApproval = onCall(
 
         const data = reqSnap.data()!;
 
-        if (data.societyId !== societyId)
-          throw new HttpsError('permission-denied', 'Cross-society access denied.');
+        assertSameSociety(data.societyId as string, societyId);
         if (data.status !== 'requested')
           throw new HttpsError('failed-precondition', `Cannot approve a request with status "${data.status}".`);
 
@@ -89,7 +80,7 @@ export const recordApproval = onCall(
       after: fullyApproved ? { status: 'approved' } : { approvalRecorded: true },
     });
 
-    void dispatchNotification({
+    dispatchNotificationSafe({
       societyId,
       type: fullyApproved ? 'expense_request_approved' : 'expense_approval_recorded',
       toRole: 'fm',
@@ -99,7 +90,7 @@ export const recordApproval = onCall(
         approvalCount,
         requiredApprovers,
       },
-    }).catch(e => console.error('notify error:', e));
+    });
 
     return { ok: true, approved: fullyApproved };
   },

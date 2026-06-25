@@ -38,8 +38,8 @@ import { useRequestedQueue } from './useRequestedQueue';
 import { useAccounts } from '../settings/useAccounts';
 import { useAuth } from '../auth/useAuth';
 import { formatMoney } from '../../lib/money';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '../../lib/firebase';
+import { tsMillis } from '../../lib/date';
+import { callables } from '../../lib/callables';
 import type { RecurringInstance, RecurringInstanceStatus } from '../../types/ledger';
 import type { PaymentMode } from '../../types/ledger';
 import type { ExpenseRequest, ExpenseRequestStatus } from '../../types/requests';
@@ -50,9 +50,7 @@ import RequestNotesDialog from './RequestNotesDialog';
 import DisbursementDialog from './DisbursementDialog';
 import RequestDetailDrawer from './RequestDetailDrawer';
 
-const withdrawFn   = httpsCallable<{ requestId: string }, { ok: true }>(functions, 'withdrawExpenseRequest');
-const approveFn    = httpsCallable<{ requestId: string; note?: string }, { ok: true; approved: boolean }>(functions, 'recordApproval');
-const closeFn      = httpsCallable<{ requestId: string; closingNote?: string }, { ok: true }>(functions, 'closeExpenseRequest');
+const { withdrawExpenseRequest: withdrawFn, recordApproval: approveFn, closeExpenseRequest: closeFn } = callables;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -82,20 +80,15 @@ function formatDueDate(date: string): string {
 }
 
 function formatDate(ts: unknown): string {
-  if (!ts) return '—';
-  const millis = (ts as { toMillis?: () => number }).toMillis?.();
-  if (!millis) return '—';
+  const ms = tsMillis(ts);
+  if (!ms) return '—';
   return new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-    .format(new Date(millis));
+    .format(new Date(ms));
 }
 
 function todayISO(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function tsMillis(ts: unknown): number {
-  return (ts as { toMillis?: () => number })?.toMillis?.() ?? 0;
 }
 
 // ─── Recurring: Status chip ───────────────────────────────────────────────────

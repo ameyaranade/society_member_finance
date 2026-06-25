@@ -4,34 +4,26 @@ exports.recordPayment = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const admin_1 = require("../lib/admin");
-const VALID_MODES = new Set(['cash', 'upi', 'cheque', 'bank']);
+const context_1 = require("../lib/context");
+const transactions_1 = require("../lib/transactions");
+const validate_1 = require("../lib/validate");
 const VALID_SOURCE_TYPES = new Set([
     'collection', 'vendorIncome', 'recurringPayment', 'expenseRequest', 'manual',
 ]);
-exports.recordPayment = (0, https_1.onCall)({ region: 'asia-south1' }, async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid)
-        throw new https_1.HttpsError('unauthenticated', 'Not signed in.');
-    const token = request.auth?.token;
-    const societyId = token?.societyId;
-    const role = token?.role;
-    if (!societyId)
-        throw new https_1.HttpsError('failed-precondition', 'No active society.');
+exports.recordPayment = (0, https_1.onCall)(async (request) => {
+    const { uid, societyId, role } = (0, context_1.requireCaller)(request);
     if (role !== 'admin' && role !== 'fm')
         throw new https_1.HttpsError('permission-denied', 'Must be Admin or FM.');
     const input = request.data;
     if (input.direction !== 'in' && input.direction !== 'out')
         throw new https_1.HttpsError('invalid-argument', 'direction must be "in" or "out".');
-    if (!Number.isInteger(input.amountPaise) || input.amountPaise <= 0)
-        throw new https_1.HttpsError('invalid-argument', 'amountPaise must be a positive integer.');
-    if (!VALID_MODES.has(input.mode))
-        throw new https_1.HttpsError('invalid-argument', 'mode must be cash, upi, cheque, or bank.');
+    (0, validate_1.requirePositivePaise)(input.amountPaise, 'amountPaise');
+    (0, validate_1.requirePaymentMode)(input.mode, 'mode');
     if (!VALID_SOURCE_TYPES.has(input.sourceType))
         throw new https_1.HttpsError('invalid-argument', 'Invalid sourceType.');
     if (!input.description?.trim())
         throw new https_1.HttpsError('invalid-argument', 'description is required.');
-    if (!input.occurredAt?.match(/^\d{4}-\d{2}-\d{2}$/))
-        throw new https_1.HttpsError('invalid-argument', 'occurredAt must be "YYYY-MM-DD".');
+    (0, validate_1.requireDateString)(input.occurredAt, 'occurredAt');
     // Manual entries (opening balances, interest, adjustments) require Admin
     if (input.sourceType === 'manual' && role !== 'admin')
         throw new https_1.HttpsError('permission-denied', 'Manual entries require Admin role.');
@@ -41,9 +33,8 @@ exports.recordPayment = (0, https_1.onCall)({ region: 'asia-south1' }, async (re
         throw new https_1.HttpsError('not-found', 'Account not found.');
     const txnRef = admin_1.db.collection(`societies/${societyId}/transactions`).doc();
     const txnId = txnRef.id;
-    const txnData = {
-        id: txnId,
-        societyId,
+    const txnData = (0, transactions_1.buildTransaction)({
+        txnId, societyId,
         direction: input.direction,
         amountPaise: input.amountPaise,
         accountId: input.accountId,
@@ -54,10 +45,8 @@ exports.recordPayment = (0, https_1.onCall)({ region: 'asia-south1' }, async (re
         sourceType: input.sourceType,
         sourceId: input.sourceId ?? txnId,
         createdBy: uid,
-        createdAt: firestore_1.FieldValue.serverTimestamp(),
-    };
-    if (input.referenceNo?.trim())
-        txnData.referenceNo = input.referenceNo.trim();
+        referenceNo: input.referenceNo,
+    });
     await txnRef.set(txnData);
     return { txnId };
 });

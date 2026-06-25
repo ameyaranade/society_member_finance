@@ -4,42 +4,32 @@ exports.markInstancePaid = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const admin_1 = require("../lib/admin");
-const VALID_MODES = new Set(['cash', 'upi', 'cheque', 'bank']);
-exports.markInstancePaid = (0, https_1.onCall)({ region: 'asia-south1' }, async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid)
-        throw new https_1.HttpsError('unauthenticated', 'Not signed in.');
-    const token = request.auth?.token;
-    const societyId = token?.societyId;
-    const role = token?.role;
-    if (!societyId)
-        throw new https_1.HttpsError('failed-precondition', 'No active society.');
+const context_1 = require("../lib/context");
+const transactions_1 = require("../lib/transactions");
+const validate_1 = require("../lib/validate");
+exports.markInstancePaid = (0, https_1.onCall)(async (request) => {
+    const { uid, societyId, role } = (0, context_1.requireCaller)(request);
     if (role !== 'admin' && role !== 'fm')
         throw new https_1.HttpsError('permission-denied', 'Must be Admin or FM.');
     const { instanceId, occurredAt, mode, referenceNo } = request.data;
     if (!instanceId?.trim())
         throw new https_1.HttpsError('invalid-argument', 'instanceId required.');
-    if (!occurredAt?.match(/^\d{4}-\d{2}-\d{2}$/))
-        throw new https_1.HttpsError('invalid-argument', 'occurredAt must be "YYYY-MM-DD".');
-    if (!VALID_MODES.has(mode))
-        throw new https_1.HttpsError('invalid-argument', 'mode must be cash, upi, cheque, or bank.');
+    (0, validate_1.requireDateString)(occurredAt, 'occurredAt');
+    (0, validate_1.requirePaymentMode)(mode, 'mode');
     // Load instance
     const instanceRef = admin_1.db.doc(`societies/${societyId}/recurringInstances/${instanceId}`);
     const instanceSnap = await instanceRef.get();
     if (!instanceSnap.exists)
         throw new https_1.HttpsError('not-found', 'Instance not found.');
     const instance = instanceSnap.data();
-    if (instance.societyId !== societyId)
-        throw new https_1.HttpsError('permission-denied', 'Cross-society access denied.');
+    (0, context_1.assertSameSociety)(instance.societyId, societyId);
     if (instance.status === 'paid')
         throw new https_1.HttpsError('failed-precondition', 'Instance is already paid.');
     // Write the transaction
     const txnRef = admin_1.db.collection(`societies/${societyId}/transactions`).doc();
     const txnId = txnRef.id;
-    const txnData = {
-        id: txnId,
-        societyId,
-        direction: 'out',
+    const txnData = (0, transactions_1.buildTransaction)({
+        txnId, societyId, direction: 'out',
         amountPaise: instance.amountPaise,
         accountId: instance.accountId,
         fundHead: instance.fundHead,
@@ -49,10 +39,8 @@ exports.markInstancePaid = (0, https_1.onCall)({ region: 'asia-south1' }, async 
         sourceType: 'recurringPayment',
         sourceId: instanceId,
         createdBy: uid,
-        createdAt: firestore_1.FieldValue.serverTimestamp(),
-    };
-    if (referenceNo?.trim())
-        txnData.referenceNo = referenceNo.trim();
+        referenceNo,
+    });
     // Mark instance paid + write transaction atomically
     const batch = admin_1.db.batch();
     batch.set(txnRef, txnData);

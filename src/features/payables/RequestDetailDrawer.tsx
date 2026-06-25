@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ref as storageRef, getDownloadURL } from 'firebase/storage';
-import { httpsCallable } from 'firebase/functions';
+import { callables } from '../../lib/callables';
 import Drawer from '@mui/material/Drawer';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
@@ -31,18 +31,17 @@ import ScheduleIcon from '@mui/icons-material/Schedule';
 import HourglassTopIcon from '@mui/icons-material/HourglassTop';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
-import { db, functions, storage } from '../../lib/firebase';
+import { db, storage } from '../../lib/firebase';
 import { useAuth } from '../auth/useAuth';
 import { useVendors } from '../settings/useVendors';
 import { formatMoney } from '../../lib/money';
+import { tsMillis } from '../../lib/date';
 import type { ExpenseRequest } from '../../types/requests';
 import DisbursementDialog from './DisbursementDialog';
 
 // ─── Callables ────────────────────────────────────────────────────────────────
 
-const approveFn  = httpsCallable<{ requestId: string; note?: string }, { ok: true; approved: boolean }>(functions, 'recordApproval');
-const withdrawFn = httpsCallable<{ requestId: string }, { ok: true }>(functions, 'withdrawExpenseRequest');
-const closeFn    = httpsCallable<{ requestId: string; closingNote?: string }, { ok: true }>(functions, 'closeExpenseRequest');
+const { recordApproval: approveFn, withdrawExpenseRequest: withdrawFn, closeExpenseRequest: closeFn } = callables;
 
 // ─── Loose subcollection doc types ───────────────────────────────────────────
 // Field names vary from what the TS types declare (legacy saves used different keys).
@@ -65,22 +64,15 @@ interface DisbursementDoc {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function toMillis(v: unknown): number {
-  if (!v) return 0;
-  if (typeof (v as { toMillis?: unknown }).toMillis === 'function')
-    return (v as { toMillis: () => number }).toMillis();
-  return 0;
-}
-
 function fmt(ts: unknown): string {
-  const ms = toMillis(ts);
+  const ms = tsMillis(ts);
   if (!ms) return '—';
   return new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
     .format(new Date(ms));
 }
 
 function fmtDateTime(ts: unknown): string {
-  const ms = toMillis(ts);
+  const ms = tsMillis(ts);
   if (!ms) return '—';
   return new Intl.DateTimeFormat('en-IN', {
     day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit',
@@ -203,19 +195,19 @@ export default function RequestDetailDrawer({ request, onClose, onTakeUp }: Prop
       onSnapshot(collection(db, `${base}/approvals`), snap => {
         setApprovals(
           snap.docs.map(d => ({ id: d.id, ...d.data() }) as ApprovalDoc)
-            .sort((a, b) => toMillis(a.approvedAt) - toMillis(b.approvedAt)),
+            .sort((a, b) => tsMillis(a.approvedAt) - tsMillis(b.approvedAt)),
         );
       }),
       onSnapshot(collection(db, `${base}/notes`), snap => {
         setNotes(
           snap.docs.map(d => ({ id: d.id, ...d.data() }) as NoteDoc)
-            .sort((a, b) => toMillis(a.at ?? a.createdAt) - toMillis(b.at ?? b.createdAt)),
+            .sort((a, b) => tsMillis(a.at ?? a.createdAt) - tsMillis(b.at ?? b.createdAt)),
         );
       }),
       onSnapshot(collection(db, `${base}/disbursements`), snap => {
         setDisbursements(
           snap.docs.map(d => ({ id: d.id, ...d.data() }) as DisbursementDoc)
-            .sort((a, b) => toMillis(a.paidAt) - toMillis(b.paidAt)),
+            .sort((a, b) => tsMillis(a.paidAt) - tsMillis(b.paidAt)),
         );
       }),
     ];

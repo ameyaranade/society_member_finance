@@ -65,7 +65,7 @@ async function recomputePeriod(societyId, period) {
         updatedAt: firestore_2.FieldValue.serverTimestamp(),
     });
 }
-exports.recomputeBalances = (0, firestore_1.onDocumentWritten)({ document: 'societies/{societyId}/transactions/{txnId}', region: 'asia-south1' }, async (event) => {
+exports.recomputeBalances = (0, firestore_1.onDocumentWritten)({ document: 'societies/{societyId}/transactions/{txnId}' }, async (event) => {
     const { societyId } = event.params;
     const before = event.data?.before.exists ? event.data.before.data() : null;
     const after = event.data?.after.exists ? event.data.after.data() : null;

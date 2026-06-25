@@ -60,7 +60,7 @@ async function generateForSociety(societyId, period) {
     return created;
 }
 /** Cron: runs at 00:00 IST on the 1st of every month. */
-exports.scheduledRecurring = (0, scheduler_1.onSchedule)({ schedule: '0 0 1 * *', timeZone: 'Asia/Kolkata', region: 'asia-south1' }, async () => {
+exports.scheduledRecurring = (0, scheduler_1.onSchedule)({ schedule: '0 0 1 * *', timeZone: 'Asia/Kolkata' }, async () => {
     const period = currentPeriodIST();
     const societiesSnap = await admin_1.db.collection('societies').get();
     let total = 0;
@@ -70,7 +70,7 @@ exports.scheduledRecurring = (0, scheduler_1.onSchedule)({ schedule: '0 0 1 * *'
     console.log(`scheduledRecurring: generated ${total} instances for period ${period}`);
 });
 /** Admin callable: generate instances for a specific society + period (for testing/backfill). */
-exports.generateRecurringInstances = (0, https_1.onCall)({ region: 'asia-south1' }, async (request) => {
+exports.generateRecurringInstances = (0, https_1.onCall)(async (request) => {
     const uid = request.auth?.uid;
     if (!uid)
         throw new https_1.HttpsError('unauthenticated', 'Not signed in.');

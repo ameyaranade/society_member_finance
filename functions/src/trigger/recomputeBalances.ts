@@ -79,7 +79,7 @@ async function recomputePeriod(societyId: string, period: string): Promise<void>
 }
 
 export const recomputeBalances = onDocumentWritten(
-  { document: 'societies/{societyId}/transactions/{txnId}', region: 'asia-south1' },
+  { document: 'societies/{societyId}/transactions/{txnId}' },
   async (event) => {
     const { societyId } = event.params;
     const before = event.data?.before.exists ? (event.data.before.data() as TxnSnapshot) : null;

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../auth/useAuth';
+import { tsMillis } from '../../lib/date';
 import type { ExpenseRequest } from '../../types/requests';
 
 /** Returns all expense requests currently in `requested` status, oldest-first. */
@@ -21,11 +22,7 @@ export function useRequestedQueue() {
       snap => {
         const docs = snap.docs
           .map(d => ({ id: d.id, ...d.data() } as ExpenseRequest))
-          .sort((a, b) => {
-            const ta = (a.submittedAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
-            const tb = (b.submittedAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
-            return ta - tb; // oldest first
-          });
+          .sort((a, b) => tsMillis(a.submittedAt) - tsMillis(b.submittedAt)); // oldest first
         setRequests(docs);
         setLoading(false);
       },

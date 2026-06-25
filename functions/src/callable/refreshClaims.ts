@@ -12,9 +12,7 @@ import type { Membership, AuthClaims } from '../lib/types';
  * 3. Recomputes and sets custom claims.
  * 4. Returns the new claims so the client can force-refresh the token.
  */
-export const refreshClaims = onCall(
-  { region: 'asia-south1' },
-  async (request): Promise<AuthClaims> => {
+export const refreshClaims = onCall(async (request): Promise<AuthClaims> => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be signed in.');
     }

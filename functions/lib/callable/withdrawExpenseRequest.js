@@ -4,17 +4,11 @@ exports.withdrawExpenseRequest = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const admin_1 = require("../lib/admin");
+const context_1 = require("../lib/context");
 const audit_1 = require("../lib/audit");
 const notify_1 = require("../lib/notify");
-exports.withdrawExpenseRequest = (0, https_1.onCall)({ region: 'asia-south1' }, async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid)
-        throw new https_1.HttpsError('unauthenticated', 'Not signed in.');
-    const token = request.auth?.token;
-    const societyId = token?.societyId;
-    const role = token?.role;
-    if (!societyId)
-        throw new https_1.HttpsError('failed-precondition', 'No active society.');
+exports.withdrawExpenseRequest = (0, https_1.onCall)(async (request) => {
+    const { uid, societyId, role } = (0, context_1.requireCaller)(request);
     if (role !== 'fm' && role !== 'admin')
         throw new https_1.HttpsError('permission-denied', 'Only FM or Admin can withdraw a request.');
     const { requestId } = request.data;
@@ -25,8 +19,7 @@ exports.withdrawExpenseRequest = (0, https_1.onCall)({ region: 'asia-south1' }, 
     if (!requestSnap.exists)
         throw new https_1.HttpsError('not-found', 'Expense request not found.');
     const data = requestSnap.data();
-    if (data.societyId !== societyId)
-        throw new https_1.HttpsError('permission-denied', 'Cross-society access denied.');
+    (0, context_1.assertSameSociety)(data.societyId, societyId);
     if (data.status === 'withdrawn')
         throw new https_1.HttpsError('failed-precondition', 'Request is already withdrawn.');
     if (data.status === 'completed')
@@ -53,11 +46,11 @@ exports.withdrawExpenseRequest = (0, https_1.onCall)({ region: 'asia-south1' }, 
         before: { status: data.status },
         after: { status: 'withdrawn' },
     });
-    void (0, notify_1.dispatchNotification)({
+    (0, notify_1.dispatchNotificationSafe)({
         societyId,
         type: 'expense_request_withdrawn',
         toRole: 'mc',
         payload: { requestId, title: data.title, requestType: data.type },
-    }).catch(e => console.error('notify error:', e));
+    });
     return { ok: true };
 });

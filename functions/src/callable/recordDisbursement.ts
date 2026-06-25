@@ -1,11 +1,13 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { db } from '../lib/admin';
+import { assertSameSociety, requireCaller } from '../lib/context';
+import { buildTransaction } from '../lib/transactions';
+import { requirePositivePaise, requireDateString, requirePaymentMode } from '../lib/validate';
 import { writeAudit } from '../lib/audit';
-import { dispatchNotification } from '../lib/notify';
+import { dispatchNotificationSafe } from '../lib/notify';
 import type { PaymentMode } from '../lib/types';
 
-const VALID_MODES = new Set<PaymentMode>(['cash', 'upi', 'cheque', 'bank']);
 
 interface RecordDisbursementInput {
   requestId: string;
@@ -19,17 +21,8 @@ interface RecordDisbursementInput {
   invoiceRef?: string;  // Storage path for invoice document
 }
 
-export const recordDisbursement = onCall(
-  { region: 'asia-south1' },
-  async (request): Promise<{ ok: true; txnId: string; disbId: string }> => {
-    const uid = request.auth?.uid;
-    if (!uid) throw new HttpsError('unauthenticated', 'Not signed in.');
-
-    const token     = request.auth?.token as Record<string, unknown> | undefined;
-    const societyId = token?.societyId as string | undefined;
-    const role      = token?.role as string | undefined;
-
-    if (!societyId) throw new HttpsError('failed-precondition', 'No active society.');
+export const recordDisbursement = onCall(async (request): Promise<{ ok: true; txnId: string; disbId: string }> => {
+    const { uid, societyId, role } = requireCaller(request);
     if (role !== 'fm')
       throw new HttpsError('permission-denied', 'Only FM can record disbursements.');
 
@@ -37,16 +30,13 @@ export const recordDisbursement = onCall(
 
     if (!input.requestId?.trim())
       throw new HttpsError('invalid-argument', 'requestId is required.');
-    if (!Number.isInteger(input.amountPaise) || input.amountPaise <= 0)
-      throw new HttpsError('invalid-argument', 'amountPaise must be a positive integer.');
+    requirePositivePaise(input.amountPaise, 'amountPaise');
     if (!input.accountId?.trim())
       throw new HttpsError('invalid-argument', 'accountId is required.');
     if (input.kind !== 'partial' && input.kind !== 'final')
       throw new HttpsError('invalid-argument', 'kind must be "partial" or "final".');
-    if (!VALID_MODES.has(input.paymentMode))
-      throw new HttpsError('invalid-argument', 'paymentMode must be cash, upi, cheque, or bank.');
-    if (!input.paidAt?.match(/^\d{4}-\d{2}-\d{2}$/))
-      throw new HttpsError('invalid-argument', 'paidAt must be "YYYY-MM-DD".');
+    requirePaymentMode(input.paymentMode, 'paymentMode');
+    requireDateString(input.paidAt, 'paidAt');
 
     const requestRef = db.doc(`societies/${societyId}/expenseRequests/${input.requestId}`);
     const accountRef = db.doc(`societies/${societyId}/accounts/${input.accountId}`);
@@ -71,8 +61,7 @@ export const recordDisbursement = onCall(
 
       const data = reqSnap.data()!;
 
-      if (data.societyId !== societyId)
-        throw new HttpsError('permission-denied', 'Cross-society access denied.');
+      assertSameSociety(data.societyId as string, societyId);
 
       // D9e spend gate — only approved or disbursed requests can receive disbursement
       if (data.status !== 'approved' && data.status !== 'disbursed')
@@ -95,23 +84,20 @@ export const recordDisbursement = onCall(
         );
 
       // Write transaction doc (triggers recomputeBalances)
-      const txnData: Record<string, unknown> = {
-        id: txnId,
-        societyId,
-        direction: 'out',
+      const txnData = buildTransaction({
+        txnId, societyId, direction: 'out',
         amountPaise: input.amountPaise,
         accountId: input.accountId,
-        fundHead: data.fundHead,
+        fundHead: data.fundHead as string,
         mode: input.paymentMode,
         description: `Disbursement: ${data.title as string}`,
         occurredAt: paidAtTs,
         sourceType: 'expenseRequest',
         sourceId: input.requestId,
         createdBy: uid,
-        createdAt: FieldValue.serverTimestamp(),
-      };
-      if (input.referenceNo?.trim()) txnData.referenceNo = input.referenceNo.trim();
-      if (input.notes?.trim()) txnData.notes = input.notes.trim();
+        referenceNo: input.referenceNo,
+        notes: input.notes,
+      });
 
       txn.set(txnRef, txnData);
 
@@ -154,12 +140,12 @@ export const recordDisbursement = onCall(
       },
     });
 
-    void dispatchNotification({
+    dispatchNotificationSafe({
       societyId,
       type: 'expense_request_disbursed',
       toRole: 'admin',
       payload: { requestId: input.requestId, title: requestTitle, amountPaise: input.amountPaise },
-    }).catch(e => console.error('notify error:', e));
+    });
 
     return { ok: true, txnId, disbId };
   },

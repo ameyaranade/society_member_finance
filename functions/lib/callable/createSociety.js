@@ -9,7 +9,7 @@ const audit_1 = require("../lib/audit");
  * Super-admin only.
  * Creates the society doc + default config + first admin membership.
  */
-exports.createSociety = (0, https_1.onCall)({ region: 'asia-south1' }, async (request) => {
+exports.createSociety = (0, https_1.onCall)(async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Must be signed in.');
     }

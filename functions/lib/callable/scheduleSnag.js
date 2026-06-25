@@ -4,6 +4,8 @@ exports.scheduleSnag = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const admin_1 = require("../lib/admin");
+const context_1 = require("../lib/context");
+const validate_1 = require("../lib/validate");
 const audit_1 = require("../lib/audit");
 const VALID_PRIORITIES = new Set(['low', 'medium', 'high']);
 const VALID_CATEGORIES = new Set([
@@ -14,15 +16,8 @@ const VALID_FUND_HEADS = new Set(['general', 'sinking', 'corpus', 'repair']);
 const VALID_PLAN_MODES = new Set([
     'month', 'quarter', 'year', 'custom', 'by_date',
 ]);
-exports.scheduleSnag = (0, https_1.onCall)({ region: 'asia-south1' }, async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid)
-        throw new https_1.HttpsError('unauthenticated', 'Not signed in.');
-    const token = request.auth?.token;
-    const societyId = token?.societyId;
-    const role = token?.role;
-    if (!societyId)
-        throw new https_1.HttpsError('failed-precondition', 'No active society.');
+exports.scheduleSnag = (0, https_1.onCall)(async (request) => {
+    const { uid, societyId, role } = (0, context_1.requireCaller)(request);
     if (role !== 'admin')
         throw new https_1.HttpsError('permission-denied', 'Only Admin can schedule a snag.');
     const input = request.data;
@@ -37,8 +32,7 @@ exports.scheduleSnag = (0, https_1.onCall)({ region: 'asia-south1' }, async (req
         throw new https_1.HttpsError('invalid-argument', 'Invalid category.');
     if (!VALID_FUND_HEADS.has(input.fundHead))
         throw new https_1.HttpsError('invalid-argument', 'Invalid fundHead.');
-    if (!Number.isInteger(input.estCostPaise) || input.estCostPaise <= 0)
-        throw new https_1.HttpsError('invalid-argument', 'estCostPaise must be a positive integer.');
+    (0, validate_1.requirePositivePaise)(input.estCostPaise, 'estCostPaise');
     // Validate budget window (D9c)
     const plan = input.plan;
     if (!plan || !VALID_PLAN_MODES.has(plan.mode))

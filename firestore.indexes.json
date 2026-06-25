@@ -24,6 +24,22 @@
         { "fieldPath": "role",      "order": "ASCENDING" },
         { "fieldPath": "status",    "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tower",      "order": "ASCENDING" },
+        { "fieldPath": "flatNumber", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "units",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tower",      "order": "ASCENDING" },
+        { "fieldPath": "flatNumber", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

@@ -1,9 +1,10 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { db } from '../lib/admin';
+import { assertSameSociety, requireCaller } from '../lib/context';
+import { buildTransaction } from '../lib/transactions';
+import { requireDateString, requirePaymentMode } from '../lib/validate';
 import type { PaymentMode } from '../lib/types';
-
-const VALID_MODES = new Set<PaymentMode>(['cash', 'upi', 'cheque', 'bank']);
 
 interface MarkInstancePaidInput {
   instanceId: string;
@@ -12,27 +13,16 @@ interface MarkInstancePaidInput {
   referenceNo?: string;
 }
 
-export const markInstancePaid = onCall(
-  { region: 'asia-south1' },
-  async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid) throw new HttpsError('unauthenticated', 'Not signed in.');
-
-    const token = request.auth?.token as Record<string, unknown> | undefined;
-    const societyId = token?.societyId as string | undefined;
-    const role = token?.role as string | undefined;
-
-    if (!societyId) throw new HttpsError('failed-precondition', 'No active society.');
+export const markInstancePaid = onCall(async (request) => {
+    const { uid, societyId, role } = requireCaller(request);
     if (role !== 'admin' && role !== 'fm')
       throw new HttpsError('permission-denied', 'Must be Admin or FM.');
 
     const { instanceId, occurredAt, mode, referenceNo } = request.data as MarkInstancePaidInput;
 
     if (!instanceId?.trim()) throw new HttpsError('invalid-argument', 'instanceId required.');
-    if (!occurredAt?.match(/^\d{4}-\d{2}-\d{2}$/))
-      throw new HttpsError('invalid-argument', 'occurredAt must be "YYYY-MM-DD".');
-    if (!VALID_MODES.has(mode))
-      throw new HttpsError('invalid-argument', 'mode must be cash, upi, cheque, or bank.');
+    requireDateString(occurredAt, 'occurredAt');
+    requirePaymentMode(mode, 'mode');
 
     // Load instance
     const instanceRef = db.doc(`societies/${societyId}/recurringInstances/${instanceId}`);
@@ -40,31 +30,26 @@ export const markInstancePaid = onCall(
     if (!instanceSnap.exists) throw new HttpsError('not-found', 'Instance not found.');
 
     const instance = instanceSnap.data()!;
-    if (instance.societyId !== societyId)
-      throw new HttpsError('permission-denied', 'Cross-society access denied.');
+    assertSameSociety(instance.societyId as string, societyId);
     if (instance.status === 'paid')
       throw new HttpsError('failed-precondition', 'Instance is already paid.');
 
     // Write the transaction
     const txnRef = db.collection(`societies/${societyId}/transactions`).doc();
     const txnId = txnRef.id;
-
-    const txnData: Record<string, unknown> = {
-      id: txnId,
-      societyId,
-      direction: 'out',
-      amountPaise: instance.amountPaise,
-      accountId: instance.accountId,
-      fundHead: instance.fundHead,
+    const txnData = buildTransaction({
+      txnId, societyId, direction: 'out',
+      amountPaise: instance.amountPaise as number,
+      accountId: instance.accountId as string,
+      fundHead: instance.fundHead as string,
       mode,
-      description: `${instance.name} — ${instance.period}`,
+      description: `${instance.name as string} — ${instance.period as string}`,
       occurredAt: Timestamp.fromDate(new Date(`${occurredAt}T00:00:00.000Z`)),
       sourceType: 'recurringPayment',
       sourceId: instanceId,
       createdBy: uid,
-      createdAt: FieldValue.serverTimestamp(),
-    };
-    if (referenceNo?.trim()) txnData.referenceNo = referenceNo.trim();
+      referenceNo,
+    });
 
     // Mark instance paid + write transaction atomically
     const batch = db.batch();

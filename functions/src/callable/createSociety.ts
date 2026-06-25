@@ -17,9 +17,7 @@ interface CreateSocietyInput {
  * Super-admin only.
  * Creates the society doc + default config + first admin membership.
  */
-export const createSociety = onCall(
-  { region: 'asia-south1' },
-  async (request): Promise<{ societyId: string }> => {
+export const createSociety = onCall(async (request): Promise<{ societyId: string }> => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be signed in.');
     }

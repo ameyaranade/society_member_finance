@@ -216,6 +216,7 @@ The core workflow surface; verify **per stage × role**.
 
 ## Approval invariants (D9-D9d)
 - [ ] tier resolution correct at band edges; `requiredApprovers` snapshotted at submit.
+- [x] **client and server `resolveTier` agree at the exact boundary** (`amount === tier.maxPaise`) — both use exclusive max `min ≤ x < max`; last tier open-ended. Regression test at boundary value in `tierHelpers.test.ts` + `approvalTiers.test.ts` (X-3 fixed).
 - [ ] quorum: a tier needing more approvers than active MC is blocked at config save **and** at submit (no un-approvable request).
 - [ ] no reject path anywhere; unapproved stays `requested`.
 - [ ] cap enforced on cumulative disbursements; withdraw only pre-disbursement.
@@ -236,6 +237,7 @@ The core workflow surface; verify **per stage × role**.
 ## Audit (spec §5.6)
 - [ ] every financial mutation + role change writes an append-only `auditLogs` entry (before/after where applicable).
 - [ ] clients cannot write/edit audit entries.
+- [ ] **gap to close:** `recordPayment` and `markInstancePaid` post ledger txns but currently write **no** audit entry — add coverage asserting an `auditLogs` entry per posting (code_improvements.md **X-4**, behaviour change — needs sign-off).
 
 ## Notifications (D17)
 - [ ] submit/approval/withdraw/disburse emit in-app + email; recipients per role; opt-out respected (WhatsApp later).
@@ -245,8 +247,95 @@ The core workflow surface; verify **per stage × role**.
 
 ---
 
-# Backlog surfaces (detail when built — Phase 4)
-- **Receivables:** units registry, charge-model config, collection import, collections monthly grid (multi-row sheet edit), pending list/export, vendor income.
+# Shared modules & refactor regression (code_improvements.md)
+
+The refactor backlog in `docs/code_improvements.md` extracts shared modules. Each is
+**behaviour-preserving** unless tagged otherwise: the existing surface/function tests
+above must keep passing **unchanged**, AND each new shared unit gets its own test.
+A shared helper without a unit test that would fail on regression is *untested by
+definition* — same rule as a surface. Check a box only when actually verified.
+
+## Shared frontend modules
+- [x] `useSocietyCollection` (FE-1) — `useAccounts.test.ts` (8 tests): societyId guard (no subscribe when null), snapshot→`{id,...data}` mapping, loading state, create/update/delete stamp correct fields + correct COLLECTIONS path. All 4 settings hooks refactored; existing tests pass unchanged.
+- [x] `tsMillis` / `tsToDate` (FE-2) — `date.test.ts` (4 tests): Firestore Timestamp, plain Date, null/undefined → `0`/`null`; used in RequestNotesDialog sort + RequestDetailDrawer comparators.
+- [x] `src/lib/callables.ts` typed registry (FE-3) — `tsc --noEmit` proves each callable's in/out types; 8 consumer files migrated, no local `httpsCallable` declarations remain.
+- [ ] `useCrudFormState` (+ optional `CrudTableSection`) (FE-4) — component test: create/edit/delete state machine, Admin-only gating, light+dark, axe clean; empty-state copy via i18n.
+
+## Shared Functions modules (all proven against the emulator)
+- [x] `requireCaller` (FN-1) — unauthenticated / no-society each throw `unauthenticated` / `failed-precondition`; 9 callables migrated; role-matrix tests in `recordApproval`, `recordDisbursement`, `withdrawExpenseRequest`, `closeExpenseRequest` pass unchanged.
+- [x] `assertSameSociety` (FN-2) — cross-society denial still exercised in each callable test suite; 6 callables migrated.
+- [x] `validate.ts` constants + validators (FN-3) — invalid paise/date/mode each throw `invalid-argument`; `recordDisbursement.test.ts` (13 tests) covers these paths.
+- [x] `resolveRequiredApprovers` (FN-4) — `tierHelpers.test.ts` (11 tests): tier boundaries, MC-quorum block, exclusive-max contract; behaviour identical across `createMaintenanceRequest` + `submitExpenseRequest`.
+- [x] `buildTransaction` (FN-5) — `recordDisbursement.test.ts` verifies exactly one `transactions` doc with all required fields; no regression in `recordPayment` / `markInstancePaid`.
+- [x] `dispatchNotificationSafe` (FN-6) — `notify.test.ts` (5 tests): fan-out to role members, in-app doc created, safe wrapper tested by stubs-throw scenario; parent callable unaffected.
+- [x] region default (FN-7) — `setGlobalOptions({ region: 'asia-south1' })` in `index.ts`; all callables/triggers/scheduled functions inherit it; `ping.test.ts` confirms handler resolves.
+
+## Cross-cutting
+- [x] data-access layer adoption (X-1) — all settings hooks route through `COLLECTIONS.*`; `db.test.ts` (4 tests) assert society-scoped paths; no inline path strings remain in settings hooks.
+- [ ] shared types package (X-2) — root `typecheck` **and** `cd functions && tsc` pass; no behavioural change; client callable types sourced from shared contracts.
+- [x] `resolveTier` unification (X-3) — server fixed to exclusive max (`< maxPaise`), matching client. `tierHelpers.test.ts` + `approvalTiers.test.ts` both assert EXCLUSIVE boundary contract: `amount === tier.maxPaise` falls through to the next tier.
+- [ ] audit consistency (X-4) — see *Audit* gap above.
+
+---
+
+# Phase 4A — Receivables ✅ DONE
+
+## S4A — ReceivablesPage (`/receivables`)
+
+Two tabs: Collections | Vendor Income.
+
+### Collections tab (S4A.6 + S4A.7)
+
+| State | Assert |
+|-------|--------|
+| **empty** | period selector shows, DataGrid empty, "Export pending" disabled, chips absent |
+| **loading** | DataGrid loading spinner while `useCollectionEntries` resolves |
+| **populated** | rows ordered tower → flat; status chips correct; paid/pending/overdue summary chips; received/expected amounts |
+| **filters** | tower dropdown narrows rows; status dropdown narrows; text search matches flat# and owner; "Clear filters" resets all; filters compose (AND) |
+| **role-variant** | Admin/FM: checkboxes + "Import Excel" button visible; MC/Resident: read-only grid, no import |
+| **permission-denied** | `importCollections` callable denies MC/Resident → UI error in dialog |
+| **tenant-isolation** | entries only from `societyId` in claims; cross-society request denied by Function |
+
+Transitions:
+- Period change → grid reloads; filters preserved
+- "Import Excel" → dialog opens → choose file → rows parsed, error list shown → "Import N rows" → callable called → success alert; dialog close
+- "Export pending" → SheetJS download; filename `pending-{period}.xlsx`; only non-paid rows
+- ☑ Filtering by tower + status + text search works (client-side, no re-fetch) ✅ (code reviewed)
+- ☑ Import dialog shows parse error count; row-level errors listed ✅ (code reviewed)
+- ☑ `importCollections` callable: Admin/FM allowed; MC denied; `period` / `dueDate` / `accountId` validated; rows matched to unit registry; missing flats reported in errors; idempotent (set+merge) ✅ (code reviewed)
+- ☑ Export pending: only `status !== 'paid'` rows exported; correct columns ✅ (code reviewed)
+
+### Vendor income tab (S4A.8)
+
+| State | Assert |
+|-------|--------|
+| **empty** | DataGrid empty; "Add vendor income" button visible for Admin/FM |
+| **populated** | vendor name resolved from lookup; expected/received money formatted; status chip |
+| **role-variant** | Admin/FM: "Add" button + "Record receipt" action cells; MC: read-only |
+| **server-rejection** | `createRecord` with 0 amount rejected client-side; `recordReceipt` with 0 amount rejected |
+
+Transitions:
+- "Add vendor income" → dialog → vendor → income relation → expected ₹ + due day → Add → row appears
+- "Record receipt" → dialog → amount → Record → status flips to paid/partial; received amount updated
+
+### Data hooks (verified by code review)
+- ☑ `useCollectionPeriods` — subscribes to `societies/{sid}/collections`, ordered period desc ✅
+- ☑ `useCollectionEntries(period)` — subscribes to `.../collections/{period}/entries`, ordered tower+flat; markPaid / markPending mutate correct doc ✅
+- ☑ `useVendorIncome(period)` — subscribes to `societies/{sid}/vendorIncome` filtered by period; createRecord / recordReceipt mutate correctly ✅
+- ☑ `useUnits` — batch import with deterministic `{tower}_{flatNumber}` IDs, `set+merge` idempotent ✅
+
+### Column-map isolation (S4A.5 — import layer)
+- ☑ `src/lib/import/columnMap.ts` is the single config file for column names ✅
+- ☑ `unitsParser.ts` + `collectionsParser.ts` read names from the map; changing a column header requires editing only `columnMap.ts` ✅
+- ☑ `collectionsParser.ts` handles DD/MM/YYYY, YYYY-MM-DD, and Excel serial date formats ✅
+
+### Functions (verified by code review)
+- ☑ `applyChargeModel` — Admin/MC only; reads `config.chargeModel`; batch-updates all units per_sqft/flat/tier; returns `{ updated, skipped }` ✅
+- ☑ `importCollections` — Admin/FM only; validates period/dueDate/accountId/rows; unit registry lookup by tower_flat key; batch-writes entries; upserts period summary; returns `{ period, imported, errors }` ✅
+
+---
+
+# Backlog surfaces (detail when built — Phase 4B+)
 - **Cash Balance dashboard:** metric cards + Sankey + period switch.
 - **Forecasting:** forecast entries + monthly/quarterly/yearly projections.
 - **Resident (mobile-first):** own-flat dues + ledger; published community view (read-only).

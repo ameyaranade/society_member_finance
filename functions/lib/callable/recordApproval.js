@@ -4,17 +4,11 @@ exports.recordApproval = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const admin_1 = require("../lib/admin");
+const context_1 = require("../lib/context");
 const audit_1 = require("../lib/audit");
 const notify_1 = require("../lib/notify");
-exports.recordApproval = (0, https_1.onCall)({ region: 'asia-south1' }, async (request) => {
-    const uid = request.auth?.uid;
-    if (!uid)
-        throw new https_1.HttpsError('unauthenticated', 'Not signed in.');
-    const token = request.auth?.token;
-    const societyId = token?.societyId;
-    const role = token?.role;
-    if (!societyId)
-        throw new https_1.HttpsError('failed-precondition', 'No active society.');
+exports.recordApproval = (0, https_1.onCall)(async (request) => {
+    const { uid, societyId, role } = (0, context_1.requireCaller)(request);
     if (role !== 'mc')
         throw new https_1.HttpsError('permission-denied', 'Only MC members can approve requests.');
     const { requestId, note } = request.data;
@@ -27,8 +21,7 @@ exports.recordApproval = (0, https_1.onCall)({ region: 'asia-south1' }, async (r
         if (!reqSnap.exists)
             throw new https_1.HttpsError('not-found', 'Expense request not found.');
         const data = reqSnap.data();
-        if (data.societyId !== societyId)
-            throw new https_1.HttpsError('permission-denied', 'Cross-society access denied.');
+        (0, context_1.assertSameSociety)(data.societyId, societyId);
         if (data.status !== 'requested')
             throw new https_1.HttpsError('failed-precondition', `Cannot approve a request with status "${data.status}".`);
         // No self-approval
@@ -71,7 +64,7 @@ exports.recordApproval = (0, https_1.onCall)({ region: 'asia-south1' }, async (r
         targetId: requestId,
         after: fullyApproved ? { status: 'approved' } : { approvalRecorded: true },
     });
-    void (0, notify_1.dispatchNotification)({
+    (0, notify_1.dispatchNotificationSafe)({
         societyId,
         type: fullyApproved ? 'expense_request_approved' : 'expense_approval_recorded',
         toRole: 'fm',
@@ -81,6 +74,6 @@ exports.recordApproval = (0, https_1.onCall)({ region: 'asia-south1' }, async (r
             approvalCount,
             requiredApprovers,
         },
-    }).catch(e => console.error('notify error:', e));
+    });
     return { ok: true, approved: fullyApproved };
 });

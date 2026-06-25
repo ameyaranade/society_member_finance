@@ -1,9 +1,11 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../lib/admin';
+import { requireCaller } from '../lib/context';
+import { requirePositivePaise } from '../lib/validate';
 import { writeAudit } from '../lib/audit';
-import { dispatchNotification } from '../lib/notify';
-import { fetchApprovalTiers, resolveTier, getActiveMCCount } from '../lib/tierHelpers';
+import { dispatchNotificationSafe } from '../lib/notify';
+import { resolveRequiredApprovers } from '../lib/tierHelpers';
 import type {
   ExpenseCategory,
   ExpensePriority,
@@ -36,17 +38,8 @@ const VALID_CATEGORIES = new Set<ExpenseCategory>([
 ]);
 const VALID_FUND_HEADS = new Set(['general', 'sinking', 'corpus', 'repair']);
 
-export const createMaintenanceRequest = onCall(
-  { region: 'asia-south1' },
-  async (request): Promise<{ requestId: string }> => {
-    const uid = request.auth?.uid;
-    if (!uid) throw new HttpsError('unauthenticated', 'Not signed in.');
-
-    const token = request.auth?.token as Record<string, unknown> | undefined;
-    const societyId = token?.societyId as string | undefined;
-    const role      = token?.role as string | undefined;
-
-    if (!societyId) throw new HttpsError('failed-precondition', 'No active society.');
+export const createMaintenanceRequest = onCall(async (request): Promise<{ requestId: string }> => {
+    const { uid, societyId, role } = requireCaller(request);
     if (role !== 'fm' && role !== 'admin')
       throw new HttpsError('permission-denied', 'Only FM or Admin can create maintenance requests.');
 
@@ -63,38 +56,19 @@ export const createMaintenanceRequest = onCall(
       throw new HttpsError('invalid-argument', 'Invalid category.');
     if (!VALID_FUND_HEADS.has(input.fundHead))
       throw new HttpsError('invalid-argument', 'Invalid fundHead.');
-    if (!Number.isInteger(input.estCostPaise) || input.estCostPaise <= 0)
-      throw new HttpsError('invalid-argument', 'estCostPaise must be a positive integer.');
+    requirePositivePaise(input.estCostPaise, 'estCostPaise');
     if (!Array.isArray(input.quotations) || input.quotations.length === 0)
       throw new HttpsError('invalid-argument', 'At least one quotation is required.');
     for (const q of input.quotations) {
       if (!q.vendorId?.trim())
         throw new HttpsError('invalid-argument', 'Each quotation must have a vendorId.');
-      if (!Number.isInteger(q.amountPaise) || q.amountPaise <= 0)
-        throw new HttpsError('invalid-argument', 'Each quotation amountPaise must be a positive integer.');
+      requirePositivePaise(q.amountPaise, 'amountPaise');
       if (!q.scopeNotes?.trim())
         throw new HttpsError('invalid-argument', 'Each quotation must have scopeNotes.');
     }
 
     // ── Tier resolution + quorum check (D9) ─────────────────────────────────
-    const [tiers, activeMCCount] = await Promise.all([
-      fetchApprovalTiers(societyId),
-      getActiveMCCount(societyId),
-    ]);
-
-    let requiredApprovers: number;
-    try {
-      requiredApprovers = resolveTier(input.estCostPaise, tiers);
-    } catch (e: unknown) {
-      throw new HttpsError('failed-precondition', e instanceof Error ? e.message : 'Tier error.');
-    }
-
-    if (requiredApprovers > activeMCCount) {
-      throw new HttpsError(
-        'failed-precondition',
-        `This request needs ${requiredApprovers} MC approver(s) but the society only has ${activeMCCount} active MC member(s). Add more MC members or adjust approval tiers in Settings.`,
-      );
-    }
+    const requiredApprovers = await resolveRequiredApprovers(societyId, input.estCostPaise);
 
     // ── Write atomically ─────────────────────────────────────────────────────
     const requestRef = db.collection(`societies/${societyId}/expenseRequests`).doc();
@@ -148,12 +122,12 @@ export const createMaintenanceRequest = onCall(
       after: { type: 'maintenance', title: input.title.trim(), estCostPaise: input.estCostPaise },
     });
 
-    void dispatchNotification({
+    dispatchNotificationSafe({
       societyId,
       type: 'expense_request_created',
       toRole: 'mc',
       payload: { requestId, title: input.title.trim(), requestType: 'maintenance' },
-    }).catch(e => console.error('notify error:', e));
+    });
 
     return { requestId };
   },

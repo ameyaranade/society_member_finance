@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../auth/useAuth';
+import { tsToDate } from '../../lib/date';
 
 export interface AppNotification {
   id: string;
@@ -44,7 +45,7 @@ export function useNotifications() {
           id: d.id,
           type: d.data().type as string,
           payload: (d.data().payload ?? {}) as Record<string, unknown>,
-          createdAt: (d.data().createdAt as { toDate?: () => Date } | null)?.toDate?.() ?? null,
+          createdAt: tsToDate(d.data().createdAt),
         }))
         .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
       setNotifications(unread);

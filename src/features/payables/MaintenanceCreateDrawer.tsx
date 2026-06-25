@@ -12,8 +12,7 @@ import Divider from '@mui/material/Divider';
 import CircularProgress from '@mui/material/CircularProgress';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '../../lib/firebase';
+import { callables } from '../../lib/callables';
 import { useAuth } from '../auth/useAuth';
 import { useVendors } from '../settings/useVendors';
 import { formatMoney, toPaise } from '../../lib/money';
@@ -57,15 +56,7 @@ function emptyQuote(): QuotationRow {
   return { vendorId: '', amountRupees: '', scopeNotes: '', uploadKey: crypto.randomUUID() };
 }
 
-const createMaintenanceRequestFn = httpsCallable<
-  {
-    title: string; description: string; location?: string;
-    priority: ExpensePriority; category: ExpenseCategory;
-    fundHead: string; estCostPaise: number;
-    quotations: { vendorId: string; amountPaise: number; scopeNotes: string }[];
-  },
-  { requestId: string }
->(functions, 'createMaintenanceRequest');
+const { createMaintenanceRequest: createMaintenanceRequestFn } = callables;
 
 interface Props {
   open: boolean;

@@ -4,7 +4,7 @@ type PingResult = { message: string; timestamp: number };
 type PingHandler = (req: unknown) => Promise<PingResult>;
 
 vi.mock('firebase-functions/v2/https', () => ({
-  onCall: vi.fn((_opts: unknown, handler: PingHandler) => handler),
+  onCall: vi.fn((optsOrHandler: unknown, maybeHandler?: PingHandler) => (maybeHandler ?? optsOrHandler) as PingHandler),
 }));
 
 vi.mock('firebase-admin/app', () => ({ initializeApp: vi.fn() }));

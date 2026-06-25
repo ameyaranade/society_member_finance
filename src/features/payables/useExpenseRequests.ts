@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../auth/useAuth';
+import { tsMillis } from '../../lib/date';
 import type { ExpenseRequest, ExpenseRequestStatus, ExpenseRequestType } from '../../types/requests';
 
 export function useExpenseRequests(type: ExpenseRequestType, statuses?: ExpenseRequestStatus[]) {
@@ -21,11 +22,7 @@ export function useExpenseRequests(type: ExpenseRequestType, statuses?: ExpenseR
       snap => {
         const docs = snap.docs
           .map(d => ({ id: d.id, ...d.data() } as ExpenseRequest))
-          .sort((a, b) => {
-            const ta = (a.createdAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
-            const tb = (b.createdAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
-            return tb - ta;
-          });
+          .sort((a, b) => tsMillis(b.createdAt) - tsMillis(a.createdAt));
         setRequests(docs);
         setLoading(false);
       },

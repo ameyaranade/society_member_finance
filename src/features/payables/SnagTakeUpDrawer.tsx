@@ -11,8 +11,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import IconButton from '@mui/material/IconButton';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AddIcon from '@mui/icons-material/Add';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '../../lib/firebase';
+import { callables } from '../../lib/callables';
 import { useAuth } from '../auth/useAuth';
 import { formatMoney, toPaise } from '../../lib/money';
 import type { ExpenseRequest } from '../../types/requests';
@@ -26,10 +25,7 @@ interface QuotationRow {
   documentRef?: string;
 }
 
-const submitExpenseFn = httpsCallable<
-  { requestId: string; quotations: { vendorId: string; amountPaise: number; scopeNotes: string; documentRef?: string }[] },
-  { ok: true }
->(functions, 'submitExpenseRequest');
+const { submitExpenseRequest: submitExpenseFn } = callables;
 
 interface Props {
   open: boolean;

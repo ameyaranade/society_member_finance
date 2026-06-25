@@ -83,7 +83,8 @@ export default function Shell() {
   const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
 
   const drawerContent = (
-    <Box sx={{ pt: 1, pb: 2 }}>
+    <Box sx={{ pb: 2 }}>
+      <Toolbar />
       <NavItems onClose={() => setMobileOpen(false)} isSuperAdmin={isSuperAdmin} role={role} />
     </Box>
   );
@@ -150,7 +151,7 @@ export default function Shell() {
           sx={{
             width: NAV_WIDTH,
             flexShrink: 0,
-            '& .MuiDrawer-paper': { width: NAV_WIDTH, boxSizing: 'border-box', top: '64px', height: 'calc(100% - 64px)' },
+            '& .MuiDrawer-paper': { width: NAV_WIDTH, boxSizing: 'border-box' },
           }}
         >
           {drawerContent}

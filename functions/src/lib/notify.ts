@@ -74,3 +74,11 @@ export async function dispatchNotification(params: DispatchParams): Promise<void
 
   // Email stub — transactional email to be implemented in a later phase
 }
+
+/**
+ * Fire-and-forget wrapper — notification failure must never block the main operation.
+ * Call sites use this instead of inlining void dispatchNotification(...).catch(...).
+ */
+export function dispatchNotificationSafe(params: Parameters<typeof dispatchNotification>[0]): void {
+  void dispatchNotification(params).catch(e => console.error('notify error:', e));
+}
