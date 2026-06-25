@@ -178,6 +178,7 @@ export default function RequestDetailDrawer({ request, onClose, onTakeUp }: Prop
   const [noteError,   setNoteError]   = useState('');
 
   const [disbTarget,      setDisbTarget]      = useState<ExpenseRequest | null>(null);
+  const [confirmApprove,  setConfirmApprove]  = useState(false);
   const [confirmWithdraw, setConfirmWithdraw] = useState(false);
   const [confirmClose,    setConfirmClose]    = useState(false);
   const [closingNote,     setClosingNote]     = useState('');
@@ -234,7 +235,7 @@ export default function RequestDetailDrawer({ request, onClose, onTakeUp }: Prop
   useEffect(() => {
     setNoteText(''); setNoteError('');
     setActionError(''); setSuccessMsg('');
-    setDisbTarget(null); setConfirmWithdraw(false); setConfirmClose(false);
+    setDisbTarget(null); setConfirmApprove(false); setConfirmWithdraw(false); setConfirmClose(false);
     setClosingNote('');
     setEvidenceSlots([{ slotKey: crypto.randomUUID(), ref: null }]);
   }, [requestId]);
@@ -664,8 +665,8 @@ export default function RequestDetailDrawer({ request, onClose, onTakeUp }: Prop
               {canApprove && (
                 <Button
                   variant="contained" color="success"
-                  startIcon={actionBusy ? <CircularProgress size={14} color="inherit" /> : <CheckCircleIcon />}
-                  onClick={handleApprove}
+                  startIcon={<CheckCircleIcon />}
+                  onClick={() => setConfirmApprove(true)}
                   disabled={actionBusy}
                 >
                   Approve
@@ -707,6 +708,26 @@ export default function RequestDetailDrawer({ request, onClose, onTakeUp }: Prop
           }}
         />
       )}
+
+      {/* Approve confirm */}
+      <Dialog open={confirmApprove} onClose={() => setConfirmApprove(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Approve request?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            Approve <strong>"{request?.title}"</strong>? This records your vote.
+            {(request?.requiredApprovers ?? 1) > 1 && (
+              <> {request!.approvalCount ?? 0} of {request!.requiredApprovers} approvals recorded so far.</>
+            )}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmApprove(false)} disabled={actionBusy}>Cancel</Button>
+          <Button color="success" variant="contained" onClick={() => { setConfirmApprove(false); handleApprove(); }} disabled={actionBusy}
+            startIcon={actionBusy ? <CircularProgress size={14} color="inherit" /> : <CheckCircleIcon />}>
+            Approve
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Withdraw confirm */}
       <Dialog open={confirmWithdraw} onClose={() => setConfirmWithdraw(false)} maxWidth="xs" fullWidth>

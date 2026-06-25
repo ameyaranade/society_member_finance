@@ -833,15 +833,17 @@ function RequestedQueueView({
 }) {
   const { requests, loading } = useRequestedQueue();
   const { user } = useAuth();
-  const [approving,      setApproving]      = useState<string | null>(null);
-  const [approveError,   setApproveError]   = useState('');
-  const [successMsg,     setSuccessMsg]     = useState('');
-  const [notesTarget,    setNotesTarget]    = useState<ExpenseRequest | null>(null);
-  const [withdrawTarget, setWithdrawTarget] = useState<ExpenseRequest | null>(null);
-  const [withdrawing,    setWithdrawing]    = useState(false);
-  const [withdrawError,  setWithdrawError]  = useState('');
+  const [approving,       setApproving]       = useState<string | null>(null);
+  const [approveTarget,   setApproveTarget]   = useState<ExpenseRequest | null>(null);
+  const [approveError,    setApproveError]    = useState('');
+  const [successMsg,      setSuccessMsg]      = useState('');
+  const [notesTarget,     setNotesTarget]     = useState<ExpenseRequest | null>(null);
+  const [withdrawTarget,  setWithdrawTarget]  = useState<ExpenseRequest | null>(null);
+  const [withdrawing,     setWithdrawing]     = useState(false);
+  const [withdrawError,   setWithdrawError]   = useState('');
 
   async function handleApprove(r: ExpenseRequest) {
+    setApproveTarget(null);
     setApproving(r.id); setApproveError('');
     try {
       const result = await approveFn({ requestId: r.id });
@@ -885,6 +887,29 @@ function RequestedQueueView({
       {approveError  && <Alert severity="error"   sx={{ mb: 2 }}>{approveError}</Alert>}
       {withdrawError && <Alert severity="error"   sx={{ mb: 2 }}>{withdrawError}</Alert>}
 
+      {/* Approve confirm */}
+      <Dialog open={!!approveTarget} onClose={() => setApproveTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Approve request?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            Approve <strong>"{approveTarget?.title}"</strong>? This records your vote.
+            {(approveTarget?.requiredApprovers ?? 1) > 1 && (
+              <> {approveTarget!.approvalCount ?? 0} of {approveTarget!.requiredApprovers} approvals recorded so far.</>
+            )}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setApproveTarget(null)} disabled={!!approving}>Cancel</Button>
+          <Button color="success" variant="contained"
+            disabled={!!approving}
+            onClick={() => approveTarget && handleApprove(approveTarget)}
+            startIcon={approving ? <CircularProgress size={14} color="inherit" /> : undefined}>
+            Approve
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Withdraw confirm */}
       <Dialog open={!!withdrawTarget} onClose={() => setWithdrawTarget(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Withdraw request?</DialogTitle>
         <DialogContent>
@@ -980,7 +1005,7 @@ function RequestedQueueView({
                           ) : (
                             <Button size="small" variant="outlined" color="success"
                               disabled={approving === r.id}
-                              onClick={() => handleApprove(r)}
+                              onClick={() => setApproveTarget(r)}
                               startIcon={approving === r.id
                                 ? <CircularProgress size={12} color="inherit" />
                                 : undefined}>
