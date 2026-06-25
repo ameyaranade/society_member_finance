@@ -132,8 +132,8 @@ export default function ApprovalTiersSettings() {
       {rows.length === 0 ? (
         <Alert severity="warning">No approval tiers configured. Expense requests cannot be submitted until at least one tier is added.</Alert>
       ) : (
-        <Paper variant="outlined">
-          <Table size="small">
+        <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 420 }}>
             <TableHead>
               <TableRow>
                 <TableCell>From (₹)</TableCell>

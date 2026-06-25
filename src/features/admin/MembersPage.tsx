@@ -168,7 +168,7 @@ export default function MembersPage() {
               key={m.id}
               display="flex"
               alignItems="center"
-              gap={2}
+              gap={{ xs: 1, sm: 2 }}
               px={2}
               py={1.5}
               sx={{
@@ -222,14 +222,14 @@ export default function MembersPage() {
                   value={m.role}
                   size="small"
                   onChange={e => changeRole(m.id, e.target.value as Role)}
-                  sx={{ minWidth: 120 }}
+                  sx={{ minWidth: { xs: 90, sm: 120 } }}
                 >
                   {ROLES.map(r => (
                     <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>
                   ))}
                 </Select>
               ) : (
-                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 100 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ minWidth: { xs: 80, sm: 100 }, flexShrink: 0 }}>
                   {ROLES.find(r => r.value === m.role)?.label ?? m.role}
                 </Typography>
               )}

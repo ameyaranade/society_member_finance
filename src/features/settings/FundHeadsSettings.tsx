@@ -93,8 +93,8 @@ export default function FundHeadsSettings() {
       {fundHeads.length === 0 ? (
         <Typography variant="body2" color="text.secondary">No fund heads yet.</Typography>
       ) : (
-        <Paper variant="outlined">
-          <Table size="small">
+        <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 380 }}>
             <TableHead>
               <TableRow>
                 <TableCell>Name</TableCell>

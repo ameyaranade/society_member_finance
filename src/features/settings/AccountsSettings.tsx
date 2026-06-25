@@ -119,8 +119,8 @@ export default function AccountsSettings() {
       {accounts.length === 0 ? (
         <Typography variant="body2" color="text.secondary">No accounts yet. Add a bank account to get started.</Typography>
       ) : (
-        <Paper variant="outlined">
-          <Table size="small">
+        <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 480 }}>
             <TableHead>
               <TableRow>
                 <TableCell>Name</TableCell>

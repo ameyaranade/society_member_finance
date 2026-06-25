@@ -188,8 +188,8 @@ export default function RecurringSettings() {
       {recurringPayments.length === 0 ? (
         <Typography variant="body2" color="text.secondary">No recurring payment templates yet.</Typography>
       ) : (
-        <Paper variant="outlined">
-          <Table size="small">
+        <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 580 }}>
             <TableHead>
               <TableRow>
                 <TableCell>Name</TableCell>
