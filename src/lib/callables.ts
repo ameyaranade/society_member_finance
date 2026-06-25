@@ -6,7 +6,7 @@ import type { CollectionImportRow } from './import/collectionsParser';
 
 type PaymentMode = 'cash' | 'upi' | 'cheque' | 'bank';
 type DisbKind    = 'partial' | 'final';
-type QuotationInput = { vendorId: string; amountPaise: number; scopeNotes: string; documentRef?: string };
+type QuotationInput = { vendorId: string; amountPaise: number; scopeNotes: string; documentRefs?: string[] };
 
 export const callables = {
   // ── Auth ────────────────────────────────────────────────────────────────────
@@ -42,12 +42,12 @@ export const callables = {
   >(functions, 'withdrawExpenseRequest'),
 
   closeExpenseRequest: httpsCallable<
-    { requestId: string; closingNote?: string },
+    { requestId: string; closingNote?: string; evidenceRefs?: string[] },
     { ok: true }
   >(functions, 'closeExpenseRequest'),
 
   recordDisbursement: httpsCallable<
-    { requestId: string; amountPaise: number; accountId: string; kind: DisbKind; paymentMode: PaymentMode; referenceNo?: string; paidAt: string; notes?: string; invoiceRef?: string },
+    { requestId: string; amountPaise: number; accountId: string; kind: DisbKind; paymentMode: PaymentMode; referenceNo?: string; paidAt: string; notes?: string; invoiceRefs?: string[] },
     { ok: true; txnId: string; disbId: string }
   >(functions, 'recordDisbursement'),
 

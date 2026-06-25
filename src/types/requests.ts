@@ -56,6 +56,9 @@ export interface ExpenseRequest {
   createdRole: string;            // 'admin' | 'fm'
   submittedAt?: Timestamp;        // when entered queue — drives Requested-queue aging (D9d)
   createdAt: Timestamp;
+  // Completion fields (set by closeExpenseRequest)
+  evidenceRefs?: string[];
+  closingNote?: string;
 }
 
 // ── Subcollection types ────────────────────────────────────────────────────
@@ -67,7 +70,8 @@ export interface Quotation {
   vendorId: string;
   amountPaise: number;
   scopeNotes: string;
-  documentRef?: string;   // Storage path
+  documentRef?: string;    // legacy: single Storage path
+  documentRefs?: string[]; // multi-doc: array of Storage paths
   createdBy: string;
   createdAt: Timestamp;
 }
@@ -97,9 +101,15 @@ export interface Disbursement {
   societyId: string;
   requestId: string;
   amountPaise: number;
-  txnId: string;          // link to societies/{sid}/transactions/{txnId}
-  invoiceRef?: string;    // Storage path
-  evidenceRef?: string;   // Storage path
+  txnId: string;           // link to societies/{sid}/transactions/{txnId}
+  invoiceRef?: string;     // legacy: single Storage path
+  invoiceRefs?: string[];  // multi-doc: array of Storage paths
   kind: 'partial' | 'final';
   paidAt: Timestamp;
+}
+
+// Added to ExpenseRequest when FM marks the request completed
+export interface CompletionEvidence {
+  evidenceRefs?: string[];  // Storage paths for photos/docs
+  closingNote?: string;
 }

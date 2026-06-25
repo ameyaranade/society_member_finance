@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { collection, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ref as storageRef, getDownloadURL } from 'firebase/storage';
 import { callables } from '../../lib/callables';
@@ -25,6 +25,8 @@ import Link from '@mui/material/Link';
 import CloseIcon from '@mui/icons-material/Close';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
+import AddIcon from '@mui/icons-material/Add';
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import PaidIcon from '@mui/icons-material/Paid';
 import BlockIcon from '@mui/icons-material/Block';
 import ScheduleIcon from '@mui/icons-material/Schedule';
@@ -32,6 +34,7 @@ import HourglassTopIcon from '@mui/icons-material/HourglassTop';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import { db, storage } from '../../lib/firebase';
+import FileUploadButton from './FileUploadButton';
 import { useAuth } from '../auth/useAuth';
 import { useVendors } from '../settings/useVendors';
 import { formatMoney } from '../../lib/money';
@@ -48,7 +51,8 @@ const { recordApproval: approveFn, withdrawExpenseRequest: withdrawFn, closeExpe
 
 interface QuotationDoc {
   id: string; vendorId: string; amountPaise: number; scopeNotes: string;
-  documentRef?: string;
+  documentRef?: string;    // legacy
+  documentRefs?: string[]; // multi-doc
 }
 interface ApprovalDoc {
   id: string; mcUid: string; note?: string; approvedAt: unknown;
@@ -59,7 +63,8 @@ interface NoteDoc {
 }
 interface DisbursementDoc {
   id: string; amountPaise: number; kind: 'partial' | 'final'; paidAt: unknown;
-  invoiceRef?: string;
+  invoiceRef?: string;     // legacy
+  invoiceRefs?: string[];  // multi-doc
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -175,9 +180,20 @@ export default function RequestDetailDrawer({ request, onClose, onTakeUp }: Prop
   const [disbTarget,      setDisbTarget]      = useState<ExpenseRequest | null>(null);
   const [confirmWithdraw, setConfirmWithdraw] = useState(false);
   const [confirmClose,    setConfirmClose]    = useState(false);
+  const [closingNote,     setClosingNote]     = useState('');
+  const [evidenceSlots,   setEvidenceSlots]   = useState<{ slotKey: string; ref: string | null }[]>(
+    [{ slotKey: crypto.randomUUID(), ref: null }],
+  );
   const [actionBusy,      setActionBusy]      = useState(false);
   const [actionError,     setActionError]     = useState('');
   const [successMsg,      setSuccessMsg]      = useState('');
+
+  // Stable path base for evidence uploads — one per request open
+  const evidencePathBase = useMemo(
+    () => requestId ? `societies/${societyId}/expense-requests/${requestId}/evidence` : '',
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [requestId],
+  );
 
   const notesEndRef = useRef<HTMLDivElement>(null);
 
@@ -219,6 +235,8 @@ export default function RequestDetailDrawer({ request, onClose, onTakeUp }: Prop
     setNoteText(''); setNoteError('');
     setActionError(''); setSuccessMsg('');
     setDisbTarget(null); setConfirmWithdraw(false); setConfirmClose(false);
+    setClosingNote('');
+    setEvidenceSlots([{ slotKey: crypto.randomUUID(), ref: null }]);
   }, [requestId]);
 
   // Auto-scroll notes list
@@ -280,7 +298,12 @@ export default function RequestDetailDrawer({ request, onClose, onTakeUp }: Prop
     if (!requestId) return;
     setActionBusy(true); setActionError('');
     try {
-      await closeFn({ requestId });
+      const refs = evidenceSlots.map(s => s.ref).filter((r): r is string => r !== null);
+      await closeFn({
+        requestId,
+        ...(closingNote.trim() ? { closingNote: closingNote.trim() } : {}),
+        ...(refs.length > 0 ? { evidenceRefs: refs } : {}),
+      });
       setConfirmClose(false);
       setSuccessMsg('Request marked as completed.');
       setTimeout(() => { setSuccessMsg(''); onClose(); }, 1800);
@@ -441,7 +464,10 @@ export default function RequestDetailDrawer({ request, onClose, onTakeUp }: Prop
                         {q.scopeNotes}
                       </Typography>
                     )}
-                    {q.documentRef && <StorageLink storagePath={q.documentRef} />}
+                    {/* Show all attached docs — new (documentRefs) and legacy (documentRef) */}
+                    {(q.documentRefs ?? (q.documentRef ? [q.documentRef] : [])).map(path => (
+                      <StorageLink key={path} storagePath={path} />
+                    ))}
                   </Paper>
                 ))}
               </Stack>
@@ -577,10 +603,37 @@ export default function RequestDetailDrawer({ request, onClose, onTakeUp }: Prop
                             </Typography>
                           </Stack>
                         </Stack>
-                        {d.invoiceRef && <StorageLink storagePath={d.invoiceRef} />}
+                        {(d.invoiceRefs ?? (d.invoiceRef ? [d.invoiceRef] : [])).map(path => (
+                          <StorageLink key={path} storagePath={path} />
+                        ))}
                       </Paper>
                     ))}
                   </Stack>
+                )}
+              </Box>
+            </>
+          )}
+
+          {/* ── Completion evidence ─────────────────────────────────────── */}
+          {status === 'completed' && (request?.evidenceRefs?.length ?? 0) > 0 && (
+            <>
+              <Divider sx={{ my: 3 }} />
+              <Box mb={2}>
+                <Stack direction="row" spacing={1} alignItems="center" mb={1.5}>
+                  <PhotoCameraIcon sx={{ color: 'text.secondary', fontSize: 16 }} />
+                  <Typography variant="overline" color="text.secondary">
+                    Completion evidence
+                  </Typography>
+                </Stack>
+                <Stack spacing={0.5}>
+                  {request!.evidenceRefs!.map(path => (
+                    <StorageLink key={path} storagePath={path} />
+                  ))}
+                </Stack>
+                {request?.closingNote && (
+                  <Typography variant="body2" color="text.secondary" mt={1.5} sx={{ fontStyle: 'italic' }}>
+                    "{request.closingNote}"
+                  </Typography>
                 )}
               </Box>
             </>
@@ -672,18 +725,57 @@ export default function RequestDetailDrawer({ request, onClose, onTakeUp }: Prop
         </DialogActions>
       </Dialog>
 
-      {/* Close/complete confirm */}
-      <Dialog open={confirmClose} onClose={() => setConfirmClose(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Mark as completed?</DialogTitle>
+      {/* Close/complete — with optional evidence upload */}
+      <Dialog open={confirmClose} onClose={() => { if (!actionBusy) setConfirmClose(false); }} maxWidth="sm" fullWidth>
+        <DialogTitle>Mark as completed</DialogTitle>
         <DialogContent>
-          <Typography variant="body2">
+          <Typography variant="body2" mb={2.5}>
             Mark <strong>"{request?.title}"</strong> as completed? This closes the request.
           </Typography>
+
+          <Typography variant="subtitle2" gutterBottom>
+            Completion evidence (optional)
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block" mb={1.5}>
+            Attach photos or documents as proof of completion (e.g. repair pictures, completion report).
+          </Typography>
+          <Stack spacing={0.75} mb={2.5}>
+            {evidenceSlots.map(slot => (
+              <FileUploadButton
+                key={slot.slotKey}
+                storagePathPrefix={`${evidencePathBase}/${slot.slotKey}`}
+                label="Attach evidence (photo/PDF)"
+                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                disabled={actionBusy || !evidencePathBase}
+                onUploaded={path => setEvidenceSlots(s => s.map(d => d.slotKey === slot.slotKey ? { ...d, ref: path } : d))}
+                onRemoved={() => setEvidenceSlots(s => s.map(d => d.slotKey === slot.slotKey ? { ...d, ref: null } : d))}
+              />
+            ))}
+            {evidenceSlots.every(s => s.ref !== null) && (
+              <Button
+                size="small"
+                startIcon={<AddIcon />}
+                disabled={actionBusy}
+                onClick={() => setEvidenceSlots(s => [...s, { slotKey: crypto.randomUUID(), ref: null }])}
+                sx={{ alignSelf: 'flex-start' }}
+              >
+                Add another
+              </Button>
+            )}
+          </Stack>
+
+          <TextField
+            label="Closing note (optional)"
+            size="small" fullWidth multiline rows={2}
+            value={closingNote}
+            onChange={e => setClosingNote(e.target.value)}
+            disabled={actionBusy}
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmClose(false)} disabled={actionBusy}>Cancel</Button>
           <Button color="success" variant="contained" onClick={handleClose} disabled={actionBusy}
-            startIcon={actionBusy ? <CircularProgress size={14} color="inherit" /> : undefined}>
+            startIcon={actionBusy ? <CircularProgress size={14} color="inherit" /> : <TaskAltIcon />}>
             Mark completed
           </Button>
         </DialogActions>

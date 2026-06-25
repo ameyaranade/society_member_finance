@@ -12,7 +12,7 @@ interface QuotationInput {
   vendorId: string;
   amountPaise: number;
   scopeNotes: string;
-  documentRef?: string;
+  documentRefs?: string[];
 }
 
 interface SubmitExpenseRequestInput {
@@ -74,7 +74,9 @@ export const submitExpenseRequest = onCall(async (request): Promise<{ ok: true }
         vendorId: q.vendorId.trim(),
         amountPaise: q.amountPaise,
         scopeNotes: q.scopeNotes.trim(),
-        ...(q.documentRef?.trim() && { documentRef: q.documentRef.trim() }),
+        ...(Array.isArray(q.documentRefs) && q.documentRefs.length > 0
+          ? { documentRefs: q.documentRefs.map((r: string) => r.trim()).filter(Boolean) }
+          : {}),
         createdBy: uid,
         createdAt: FieldValue.serverTimestamp(),
       };

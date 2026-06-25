@@ -8,6 +8,7 @@ import { dispatchNotificationSafe } from '../lib/notify';
 interface CloseExpenseRequestInput {
   requestId: string;
   closingNote?: string;
+  evidenceRefs?: string[];  // Storage paths for completion evidence (photos, docs)
 }
 
 export const closeExpenseRequest = onCall(async (request): Promise<{ ok: true }> => {
@@ -15,7 +16,7 @@ export const closeExpenseRequest = onCall(async (request): Promise<{ ok: true }>
     if (role !== 'fm')
       throw new HttpsError('permission-denied', 'Only FM can close expense requests.');
 
-    const { requestId, closingNote } = request.data as CloseExpenseRequestInput;
+    const { requestId, closingNote, evidenceRefs } = request.data as CloseExpenseRequestInput;
     if (!requestId?.trim())
       throw new HttpsError('invalid-argument', 'requestId is required.');
 
@@ -41,6 +42,9 @@ export const closeExpenseRequest = onCall(async (request): Promise<{ ok: true }>
       completedBy: uid,
     };
     if (closingNote?.trim()) update.closingNote = closingNote.trim();
+    if (Array.isArray(evidenceRefs) && evidenceRefs.length > 0) {
+      update.evidenceRefs = evidenceRefs.map((r: string) => r.trim()).filter(Boolean);
+    }
 
     await requestRef.update(update);
 

@@ -13,6 +13,7 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
 import Divider from '@mui/material/Divider';
+import AddIcon from '@mui/icons-material/Add';
 import { useAccounts } from '../settings/useAccounts';
 import { formatMoney } from '../../lib/money';
 import type { ExpenseRequest } from '../../types/requests';
@@ -55,13 +56,14 @@ export default function DisbursementDialog({ request, onClose, onDisbursed }: Di
   const [referenceNo,  setReferenceNo]  = useState('');
   const [paidAt,       setPaidAt]       = useState(todayISO());
   const [notes,        setNotes]        = useState('');
-  const [invoiceRef,   setInvoiceRef]   = useState<string | undefined>();
+  const [invoiceSlots, setInvoiceSlots] = useState<{ slotKey: string; ref: string | null }[]>(
+    [{ slotKey: crypto.randomUUID(), ref: null }],
+  );
   const [submitting,   setSubmitting]   = useState(false);
   const [error,        setError]        = useState('');
 
-  // Stable path prefix for invoice upload — tied to this dialog session
-  const invoicePathPrefix = useMemo(
-    () => `societies/${request.societyId}/expense-requests/${request.id}/disbursements/${crypto.randomUUID()}`,
+  const disbPathBase = useMemo(
+    () => `societies/${request.societyId}/expense-requests/${request.id}/disbursements`,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
@@ -84,7 +86,9 @@ export default function DisbursementDialog({ request, onClose, onDisbursed }: Di
         paidAt,
         ...(referenceNo.trim() ? { referenceNo: referenceNo.trim() } : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
-        ...(invoiceRef ? { invoiceRef } : {}),
+        ...(invoiceSlots.some(s => s.ref)
+        ? { invoiceRefs: invoiceSlots.map(s => s.ref).filter((r): r is string => r !== null) }
+        : {}),
       });
       onDisbursed();
       onClose();
@@ -165,16 +169,32 @@ export default function DisbursementDialog({ request, onClose, onDisbursed }: Di
             value={notes} onChange={e => setNotes(e.target.value)} />
 
           <Box>
-            <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
+            <Typography variant="caption" color="text.secondary" display="block" mb={0.75}>
               Invoice / payment proof (optional)
             </Typography>
-            <FileUploadButton
-              storagePathPrefix={invoicePathPrefix}
-              label="Attach invoice"
-              disabled={submitting}
-              onUploaded={path => setInvoiceRef(path)}
-              onRemoved={() => setInvoiceRef(undefined)}
-            />
+            <Stack spacing={0.75}>
+              {invoiceSlots.map(slot => (
+                <FileUploadButton
+                  key={slot.slotKey}
+                  storagePathPrefix={`${disbPathBase}/${slot.slotKey}`}
+                  label="Attach invoice or receipt"
+                  disabled={submitting}
+                  onUploaded={path => setInvoiceSlots(s => s.map(d => d.slotKey === slot.slotKey ? { ...d, ref: path } : d))}
+                  onRemoved={() => setInvoiceSlots(s => s.map(d => d.slotKey === slot.slotKey ? { ...d, ref: null } : d))}
+                />
+              ))}
+              {invoiceSlots.every(s => s.ref !== null) && (
+                <Button
+                  size="small"
+                  startIcon={<AddIcon />}
+                  disabled={submitting}
+                  onClick={() => setInvoiceSlots(s => [...s, { slotKey: crypto.randomUUID(), ref: null }])}
+                  sx={{ alignSelf: 'flex-start' }}
+                >
+                  Add another invoice
+                </Button>
+              )}
+            </Stack>
           </Box>
         </Stack>
       </DialogContent>

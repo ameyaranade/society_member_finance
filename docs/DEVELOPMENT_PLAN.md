@@ -3,7 +3,7 @@
 **Project:** Multi‑Society Financial Management Web Application
 **For:** an AI coding agent (e.g. GPT) to execute step‑by‑step.
 **Companion docs:** [architecture-design-requirements.md](architecture-design-requirements.md) (data model §6, functions §7, rules §9, decisions D1–D9d), [DESIGN_LANGUAGE.md](DESIGN_LANGUAGE.md), [TEST_PLAN.md](TEST_PLAN.md) (state-machine test coverage), [UX_INVARIANTS_CHECKLIST.md](UX_INVARIANTS_CHECKLIST.md) (per-change review gate), [functional-spec-draft.md](functional-spec-draft.md).
-**Last updated:** 2026-06-23
+**Last updated:** 2026-06-25
 
 ---
 
@@ -333,6 +333,19 @@ Do: (a) Manual add for Collections entries; (b) Export selected (replaces Export
 - `AddCollectionEntryDialog` in `ReceivablesPage.tsx` — fields: flat, tower, period, due date, account, fund head, status; if paid: amount, payment date, ref no. Calls `importCollections` callable with a single row (unit lookup by flat+tower key in the callable). "Add entry" button shown for Admin/FM.
 - Vendor income already had "Add vendor income" dialog (S4A.8).
 - "Export pending" button replaced by conditional "Export (N)" button that appears only when rows are selected. Exports selected rows from the current filtered view — so "filter → select all → export" exports exactly the filtered set.
+
+**S3.31 — Multi-document uploads + completion evidence.** ✅
+Do: (a) Support multiple quotation documents per quotation (was single); (b) Multiple invoice attachments per disbursement; (c) FM can attach evidence documents (photos/repair pictures) when marking a request completed; (d) All uploaded docs visible in request history.
+**Actual:**
+- `Quotation` type: added `documentRefs?: string[]` (keeping legacy `documentRef` for backward compat).
+- `Disbursement` type: added `invoiceRefs?: string[]` (keeping legacy `invoiceRef`).
+- `ExpenseRequest` type: added `evidenceRefs?: string[]` and `closingNote?: string` (set at completion).
+- `createMaintenanceRequest`, `submitExpenseRequest`: accept `documentRefs?: string[]` per quotation; store array.
+- `recordDisbursement`: accept `invoiceRefs?: string[]`; store array.
+- `closeExpenseRequest`: accept `evidenceRefs?: string[]` and `closingNote?`; store on request doc.
+- UI: slot-array pattern in `MaintenanceCreateDrawer`, `SnagTakeUpDrawer`, `DisbursementDialog` — start with one slot, "Add another document/invoice" button appears when all slots are filled.
+- `RequestDetailDrawer`: renders all docs for quotations and disbursements (handles both new `*Refs` arrays and legacy single-field); "Mark completed" confirm dialog replaced by a richer dialog with evidence upload area + closing note field; new "Completion evidence" section shown at bottom of detail when `status === 'completed'` and evidence refs exist.
+- All deployed to `asia-south1`.
 
 ### 4B. Cash Balance Dashboard (Phase 2)
 **S4B.1 — Cash position rollups.**

@@ -12,6 +12,7 @@ import Divider from '@mui/material/Divider';
 import CircularProgress from '@mui/material/CircularProgress';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
+import AttachFileOutlinedIcon from '@mui/icons-material/AttachFileOutlined';
 import { callables } from '../../lib/callables';
 import { useAuth } from '../auth/useAuth';
 import { useVendors } from '../settings/useVendors';
@@ -20,12 +21,13 @@ import type { ExpenseCategory, ExpensePriority } from '../../types/requests';
 import type { FundCode } from '../../types/config';
 import FileUploadButton from './FileUploadButton';
 
+interface DocSlot { slotKey: string; ref: string | null; }
+
 interface QuotationRow {
   vendorId: string;
   amountRupees: string;
   scopeNotes: string;
-  uploadKey: string;    // UUID for staging storage path (generated at row creation)
-  documentRef?: string; // set after file upload
+  docSlots: DocSlot[];
 }
 
 const PRIORITIES: { value: ExpensePriority; label: string }[] = [
@@ -53,7 +55,7 @@ const FUND_HEADS: { value: FundCode; label: string }[] = [
 ];
 
 function emptyQuote(): QuotationRow {
-  return { vendorId: '', amountRupees: '', scopeNotes: '', uploadKey: crypto.randomUUID() };
+  return { vendorId: '', amountRupees: '', scopeNotes: '', docSlots: [{ slotKey: crypto.randomUUID(), ref: null }] };
 }
 
 const { createMaintenanceRequest: createMaintenanceRequestFn } = callables;
@@ -115,12 +117,15 @@ export default function MaintenanceCreateDrawer({ open, onClose, onCreated }: Pr
         ...(location.trim() && { location: location.trim() }),
         priority, category, fundHead,
         estCostPaise,
-        quotations: quotations.map(q => ({
-          vendorId:    q.vendorId,
-          amountPaise: toPaise(parseFloat(q.amountRupees)),
-          scopeNotes:  q.scopeNotes.trim(),
-          ...(q.documentRef ? { documentRef: q.documentRef } : {}),
-        })),
+        quotations: quotations.map(q => {
+          const refs = q.docSlots.map(s => s.ref).filter((r): r is string => r !== null);
+          return {
+            vendorId:    q.vendorId,
+            amountPaise: toPaise(parseFloat(q.amountRupees)),
+            scopeNotes:  q.scopeNotes.trim(),
+            ...(refs.length > 0 ? { documentRefs: refs } : {}),
+          };
+        }),
       });
       reset();
       onCreated(result.data.requestId);
@@ -206,13 +211,41 @@ export default function MaintenanceCreateDrawer({ open, onClose, onCreated }: Pr
                       ? formatMoney(toPaise(parseFloat(q.amountRupees))) : undefined} />
                   <TextField label="Scope notes" size="small" fullWidth required multiline minRows={2}
                     value={q.scopeNotes} onChange={e => updateQuote(i, { scopeNotes: e.target.value })} />
-                  <FileUploadButton
-                    storagePathPrefix={`societies/${societyId}/expense-requests/staging/${q.uploadKey}`}
-                    label="Attach quotation (PDF/image)"
-                    disabled={submitting || !societyId}
-                    onUploaded={path => updateQuote(i, { documentRef: path })}
-                    onRemoved={() => updateQuote(i, { documentRef: undefined })}
-                  />
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
+                      <AttachFileOutlinedIcon sx={{ fontSize: 12, mr: 0.5, verticalAlign: 'middle' }} />
+                      Quotation documents (optional)
+                    </Typography>
+                    <Stack spacing={0.75}>
+                      {q.docSlots.map(slot => (
+                        <FileUploadButton
+                          key={slot.slotKey}
+                          storagePathPrefix={`societies/${societyId}/expense-requests/staging/${slot.slotKey}`}
+                          label="Attach document (PDF/image)"
+                          disabled={submitting || !societyId}
+                          onUploaded={path => updateQuote(i, {
+                            docSlots: q.docSlots.map(s => s.slotKey === slot.slotKey ? { ...s, ref: path } : s),
+                          })}
+                          onRemoved={() => updateQuote(i, {
+                            docSlots: q.docSlots.map(s => s.slotKey === slot.slotKey ? { ...s, ref: null } : s),
+                          })}
+                        />
+                      ))}
+                      {q.docSlots.every(s => s.ref !== null) && (
+                        <Button
+                          size="small"
+                          startIcon={<AddIcon />}
+                          disabled={submitting}
+                          onClick={() => updateQuote(i, {
+                            docSlots: [...q.docSlots, { slotKey: crypto.randomUUID(), ref: null }],
+                          })}
+                          sx={{ alignSelf: 'flex-start' }}
+                        >
+                          Add another document
+                        </Button>
+                      )}
+                    </Stack>
+                  </Box>
                 </Stack>
               </Box>
             ))}

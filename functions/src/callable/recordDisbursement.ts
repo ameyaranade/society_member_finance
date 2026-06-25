@@ -18,7 +18,7 @@ interface RecordDisbursementInput {
   referenceNo?: string;
   paidAt: string;  // "YYYY-MM-DD"
   notes?: string;
-  invoiceRef?: string;  // Storage path for invoice document
+  invoiceRefs?: string[];  // Storage paths for invoice documents
 }
 
 export const recordDisbursement = onCall(async (request): Promise<{ ok: true; txnId: string; disbId: string }> => {
@@ -113,7 +113,9 @@ export const recordDisbursement = onCall(async (request): Promise<{ ok: true; tx
         createdBy: uid,
         createdAt: FieldValue.serverTimestamp(),
       };
-      if (input.invoiceRef?.trim()) disbData.invoiceRef = input.invoiceRef.trim();
+      if (Array.isArray(input.invoiceRefs) && input.invoiceRefs.length > 0) {
+        disbData.invoiceRefs = input.invoiceRefs.map((r: string) => r.trim()).filter(Boolean);
+      }
 
       txn.set(disbRef, disbData);
 

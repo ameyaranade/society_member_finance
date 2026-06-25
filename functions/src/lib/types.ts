@@ -93,6 +93,8 @@ export interface ExpenseRequest {
   createdRole: string;
   submittedAt?: FirebaseFirestore.Timestamp;
   createdAt: WriteTimestamp;
+  evidenceRefs?: string[];
+  closingNote?: string;
 }
 
 export interface Quotation {
@@ -102,7 +104,8 @@ export interface Quotation {
   vendorId: string;
   amountPaise: number;
   scopeNotes: string;
-  documentRef?: string;
+  documentRef?: string;    // legacy
+  documentRefs?: string[]; // multi-doc
   createdBy: string;
   createdAt: WriteTimestamp;
 }
@@ -132,8 +135,8 @@ export interface Disbursement {
   requestId: string;
   amountPaise: number;
   txnId: string;
-  invoiceRef?: string;
-  evidenceRef?: string;
+  invoiceRef?: string;     // legacy
+  invoiceRefs?: string[];  // multi-doc
   kind: 'partial' | 'final';
   paidAt: WriteTimestamp;
 }

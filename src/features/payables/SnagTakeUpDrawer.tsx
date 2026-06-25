@@ -11,18 +11,20 @@ import CircularProgress from '@mui/material/CircularProgress';
 import IconButton from '@mui/material/IconButton';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AddIcon from '@mui/icons-material/Add';
+import AttachFileOutlinedIcon from '@mui/icons-material/AttachFileOutlined';
 import { callables } from '../../lib/callables';
 import { useAuth } from '../auth/useAuth';
 import { formatMoney, toPaise } from '../../lib/money';
 import type { ExpenseRequest } from '../../types/requests';
 import FileUploadButton from './FileUploadButton';
 
+interface DocSlot { slotKey: string; ref: string | null; }
+
 interface QuotationRow {
   vendorId: string;
   amountRupees: string;
   scopeNotes: string;
-  uploadKey: string;
-  documentRef?: string;
+  docSlots: DocSlot[];
 }
 
 const { submitExpenseRequest: submitExpenseFn } = callables;
@@ -35,7 +37,7 @@ interface Props {
 }
 
 function emptyRow(): QuotationRow {
-  return { vendorId: '', amountRupees: '', scopeNotes: '', uploadKey: crypto.randomUUID() };
+  return { vendorId: '', amountRupees: '', scopeNotes: '', docSlots: [{ slotKey: crypto.randomUUID(), ref: null }] };
 }
 
 export default function SnagTakeUpDrawer({ open, snag, onClose, onSubmitted }: Props) {
@@ -72,11 +74,12 @@ export default function SnagTakeUpDrawer({ open, snag, onClose, onSubmitted }: P
         setError(`Quotation ${i + 1}: amount must be a positive number.`); return;
       }
       if (!r.scopeNotes.trim()) { setError(`Quotation ${i + 1}: scope notes are required.`); return; }
+      const refs = r.docSlots.map(s => s.ref).filter((x): x is string => x !== null);
       quotations.push({
         vendorId: r.vendorId.trim(),
         amountPaise: paise,
         scopeNotes: r.scopeNotes.trim(),
-        ...(r.documentRef ? { documentRef: r.documentRef } : {}),
+        ...(refs.length > 0 ? { documentRefs: refs } : {}),
       });
     }
 
@@ -147,13 +150,41 @@ export default function SnagTakeUpDrawer({ open, snag, onClose, onSubmitted }: P
                   ? formatMoney(toPaise(parseFloat(row.amountRupees))) : ''} />
               <TextField label="Scope notes" required size="small" fullWidth multiline minRows={2}
                 value={row.scopeNotes} onChange={e => updateRow(idx, { scopeNotes: e.target.value })} />
-              <FileUploadButton
-                storagePathPrefix={`societies/${societyId}/expense-requests/staging/${row.uploadKey}`}
-                label="Attach quotation (PDF/image)"
-                disabled={submitting || !societyId}
-                onUploaded={path => updateRow(idx, { documentRef: path })}
-                onRemoved={() => updateRow(idx, { documentRef: undefined })}
-              />
+              <Box>
+                <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
+                  <AttachFileOutlinedIcon sx={{ fontSize: 12, mr: 0.5, verticalAlign: 'middle' }} />
+                  Quotation documents (optional)
+                </Typography>
+                <Stack spacing={0.75}>
+                  {row.docSlots.map(slot => (
+                    <FileUploadButton
+                      key={slot.slotKey}
+                      storagePathPrefix={`societies/${societyId}/expense-requests/staging/${slot.slotKey}`}
+                      label="Attach document (PDF/image)"
+                      disabled={submitting || !societyId}
+                      onUploaded={path => updateRow(idx, {
+                        docSlots: row.docSlots.map(s => s.slotKey === slot.slotKey ? { ...s, ref: path } : s),
+                      })}
+                      onRemoved={() => updateRow(idx, {
+                        docSlots: row.docSlots.map(s => s.slotKey === slot.slotKey ? { ...s, ref: null } : s),
+                      })}
+                    />
+                  ))}
+                  {row.docSlots.every(s => s.ref !== null) && (
+                    <Button
+                      size="small"
+                      startIcon={<AddIcon />}
+                      disabled={submitting}
+                      onClick={() => updateRow(idx, {
+                        docSlots: [...row.docSlots, { slotKey: crypto.randomUUID(), ref: null }],
+                      })}
+                      sx={{ alignSelf: 'flex-start' }}
+                    >
+                      Add another document
+                    </Button>
+                  )}
+                </Stack>
+              </Box>
             </Stack>
           </Box>
         ))}
