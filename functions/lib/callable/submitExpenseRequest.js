@@ -53,7 +53,9 @@ exports.submitExpenseRequest = (0, https_1.onCall)(async (request) => {
             vendorId: q.vendorId.trim(),
             amountPaise: q.amountPaise,
             scopeNotes: q.scopeNotes.trim(),
-            ...(q.documentRef?.trim() && { documentRef: q.documentRef.trim() }),
+            ...(Array.isArray(q.documentRefs) && q.documentRefs.length > 0
+                ? { documentRefs: q.documentRefs.map((r) => r.trim()).filter(Boolean) }
+                : {}),
             createdBy: uid,
             createdAt: firestore_1.FieldValue.serverTimestamp(),
         };

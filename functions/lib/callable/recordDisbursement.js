@@ -80,8 +80,9 @@ exports.recordDisbursement = (0, https_1.onCall)(async (request) => {
             createdBy: uid,
             createdAt: firestore_1.FieldValue.serverTimestamp(),
         };
-        if (input.invoiceRef?.trim())
-            disbData.invoiceRef = input.invoiceRef.trim();
+        if (Array.isArray(input.invoiceRefs) && input.invoiceRefs.length > 0) {
+            disbData.invoiceRefs = input.invoiceRefs.map((r) => r.trim()).filter(Boolean);
+        }
         txn.set(disbRef, disbData);
         // Update request: increment disbursedAmountPaise, set status to 'disbursed'
         txn.update(requestRef, {

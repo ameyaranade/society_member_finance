@@ -11,7 +11,7 @@ exports.closeExpenseRequest = (0, https_1.onCall)(async (request) => {
     const { uid, societyId, role } = (0, context_1.requireCaller)(request);
     if (role !== 'fm')
         throw new https_1.HttpsError('permission-denied', 'Only FM can close expense requests.');
-    const { requestId, closingNote } = request.data;
+    const { requestId, closingNote, evidenceRefs } = request.data;
     if (!requestId?.trim())
         throw new https_1.HttpsError('invalid-argument', 'requestId is required.');
     const requestRef = admin_1.db.doc(`societies/${societyId}/expenseRequests/${requestId}`);
@@ -29,6 +29,9 @@ exports.closeExpenseRequest = (0, https_1.onCall)(async (request) => {
     };
     if (closingNote?.trim())
         update.closingNote = closingNote.trim();
+    if (Array.isArray(evidenceRefs) && evidenceRefs.length > 0) {
+        update.evidenceRefs = evidenceRefs.map((r) => r.trim()).filter(Boolean);
+    }
     await requestRef.update(update);
     await (0, audit_1.writeAudit)({
         societyId,
