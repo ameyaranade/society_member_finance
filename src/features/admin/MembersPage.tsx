@@ -20,6 +20,7 @@ import {
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import CircularProgress from '@mui/material/CircularProgress';
 import { useTranslation } from 'react-i18next';
 import { callables } from '../../lib/callables';
 import { useAuth } from '../auth/useAuth';
@@ -113,21 +114,24 @@ export default function MembersPage() {
   const { memberships, loading, error, refetch } = useMemberships(societyId);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [confirmDeactivate, setConfirmDeactivate] = useState<{ id: string; name: string } | null>(null);
+  const [toggling, setToggling] = useState(false);
 
   const isAdmin = callerRole === 'admin';
 
   if (!isAdmin) return <Navigate to="/forbidden" replace />;
 
-  async function toggleStatus(membershipId: string, currentStatus: string) {
+  async function toggleStatus(membershipId: string, newStatus: 'active' | 'deactivated') {
     setActionError('');
+    setToggling(true);
     try {
-      await updateMembershipFn({
-        membershipId,
-        status: currentStatus === 'active' ? 'deactivated' : 'active',
-      });
+      await updateMembershipFn({ membershipId, status: newStatus });
       refetch();
     } catch (err) {
       setActionError((err as Error).message);
+    } finally {
+      setToggling(false);
+      setConfirmDeactivate(null);
     }
   }
 
@@ -236,13 +240,17 @@ export default function MembersPage() {
 
               {/* Activate/deactivate (admin only) */}
               {isAdmin && (
-                <Tooltip
-                  title={m.status === 'active' ? 'Deactivate' : 'Reactivate'}
-                >
+                <Tooltip title={m.status === 'active' ? 'Deactivate' : 'Reactivate'}>
                   <IconButton
                     size="small"
-                    onClick={() => toggleStatus(m.id, m.status)}
                     aria-label={m.status === 'active' ? 'Deactivate member' : 'Reactivate member'}
+                    onClick={() => {
+                      if (m.status === 'active') {
+                        setConfirmDeactivate({ id: m.id, name: m.displayName || m.email });
+                      } else {
+                        void toggleStatus(m.id, 'active');
+                      }
+                    }}
                   >
                     {m.status === 'active'
                       ? <BlockIcon fontSize="small" />
@@ -269,6 +277,32 @@ export default function MembersPage() {
           onDone={() => { setInviteOpen(false); refetch(); }}
         />
       )}
+
+      <Dialog
+        open={!!confirmDeactivate}
+        onClose={() => { if (!toggling) setConfirmDeactivate(null); }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Deactivate member?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            Deactivate <strong>{confirmDeactivate?.name}</strong>? They will lose access immediately.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDeactivate(null)} disabled={toggling}>Cancel</Button>
+          <Button
+            color="error"
+            variant="contained"
+            disabled={toggling}
+            onClick={() => confirmDeactivate && toggleStatus(confirmDeactivate.id, 'deactivated')}
+            startIcon={toggling ? <CircularProgress size={14} color="inherit" /> : <BlockIcon />}
+          >
+            Deactivate
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
