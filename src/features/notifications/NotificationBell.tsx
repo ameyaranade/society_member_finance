@@ -55,8 +55,8 @@ function notificationText(n: AppNotification): string {
     case 'expense_request_disbursed': {
       const amt = n.payload.amountPaise as number | undefined;
       return amt
-        ? `Disbursement of ${formatMoney(amt)} recorded for "${title}"`
-        : `Disbursement recorded for "${title}"`;
+        ? `Payment of ${formatMoney(amt)} recorded for "${title}"`
+        : `Payment recorded for "${title}"`;
     }
     case 'expense_request_completed':
       return `Request "${title}" has been completed`;

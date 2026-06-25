@@ -18,7 +18,7 @@ describe('StatusChip', () => {
       ['approved', 'Approved'],
       ['requested', 'Requested'],
       ['scheduled', 'Scheduled'],
-      ['disbursed', 'Disbursed'],
+      ['disbursed', 'In progress'],
       ['completed', 'Completed'],
       ['withdrawn', 'Withdrawn'],
     ];

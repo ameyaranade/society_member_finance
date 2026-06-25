@@ -86,8 +86,8 @@ function fmtDateTime(ts: unknown): string {
 
 // ─── Stage configuration ─────────────────────────────────────────────────────
 
-const MAINT_STEPS = ['Requested', 'Approved', 'Disbursed', 'Completed'];
-const SNAG_STEPS  = ['Scheduled', 'Requested', 'Approved', 'Disbursed'];
+const MAINT_STEPS = ['Requested', 'Approved', 'In progress', 'Completed'];
+const SNAG_STEPS  = ['Scheduled', 'Requested', 'Approved', 'In progress'];
 
 function getActiveStep(status: string, type: string): number {
   if (type === 'snag') {
@@ -102,7 +102,7 @@ const STATUS_CFG: Record<string, { label: string; color: 'default' | 'info' | 'w
   scheduled: { label: 'Scheduled',        color: 'default',  icon: <ScheduleIcon fontSize="small" /> },
   requested: { label: 'Pending approval', color: 'warning',  icon: <HourglassTopIcon fontSize="small" /> },
   approved:  { label: 'Approved',         color: 'info',     icon: <CheckCircleIcon fontSize="small" /> },
-  disbursed: { label: 'Disbursed',        color: 'info',     icon: <AccountBalanceWalletIcon fontSize="small" /> },
+  disbursed: { label: 'In progress',       color: 'info',     icon: <AccountBalanceWalletIcon fontSize="small" /> },
   completed: { label: 'Completed',        color: 'success',  icon: <TaskAltIcon fontSize="small" /> },
   withdrawn: { label: 'Withdrawn',        color: 'error',    icon: <BlockIcon fontSize="small" /> },
 };
@@ -424,7 +424,7 @@ export default function RequestDetailDrawer({ request, onClose, onTakeUp }: Prop
                 />
               )}
               {(request?.disbursedAmountPaise ?? 0) > 0 && (
-                <Row label="Disbursed so far" value={formatMoney(request!.disbursedAmountPaise!)} />
+                <Row label="Paid so far" value={formatMoney(request!.disbursedAmountPaise!)} />
               )}
               <Row label="Created"   value={fmt(request?.createdAt)} />
               {request?.submittedAt && (
@@ -567,17 +567,17 @@ export default function RequestDetailDrawer({ request, onClose, onTakeUp }: Prop
             )}
           </Box>
 
-          {/* ── Disbursements ───────────────────────────────────────────── */}
+          {/* ── Payments ────────────────────────────────────────────────── */}
           {(disbursements.length > 0 || status === 'disbursed' || status === 'completed') && (
             <>
               <Divider sx={{ my: 3 }} />
               <Box mb={2}>
                 <Typography variant="overline" color="text.secondary">
-                  Disbursements ({disbursements.length})
+                  Payments ({disbursements.length})
                 </Typography>
                 {disbursements.length === 0 ? (
                   <Typography variant="body2" color="text.disabled" mt={1}>
-                    No disbursements recorded.
+                    No payments recorded.
                   </Typography>
                 ) : (
                   <Stack spacing={1} mt={1.5}>
@@ -590,7 +590,7 @@ export default function RequestDetailDrawer({ request, onClose, onTakeUp }: Prop
                             </Typography>
                             <Chip
                               size="small"
-                              label={d.kind === 'final' ? 'Final' : 'Partial'}
+                              label={d.kind === 'final' ? 'Final payment' : 'Part payment'}
                               color={d.kind === 'final' ? 'success' : 'default'}
                               variant="outlined"
                             />
@@ -678,7 +678,7 @@ export default function RequestDetailDrawer({ request, onClose, onTakeUp }: Prop
                   startIcon={<PaidIcon />}
                   onClick={() => setDisbTarget(request)}
                 >
-                  Disburse
+                  Record payment
                 </Button>
               )}
               {canClose && (
@@ -703,7 +703,7 @@ export default function RequestDetailDrawer({ request, onClose, onTakeUp }: Prop
           onClose={() => setDisbTarget(null)}
           onDisbursed={() => {
             setDisbTarget(null);
-            setSuccessMsg('Disbursement recorded.');
+            setSuccessMsg('Payment recorded.');
             setTimeout(() => setSuccessMsg(''), 4000);
           }}
         />

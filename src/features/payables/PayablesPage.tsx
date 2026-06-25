@@ -118,7 +118,7 @@ const REQ_STATUS: Record<ExpenseRequestStatus, { label: string; color: 'default'
   scheduled: { label: 'Scheduled',        color: 'default'  },
   requested: { label: 'Pending approval', color: 'warning'  },
   approved:  { label: 'Approved',         color: 'info'     },
-  disbursed: { label: 'Disbursed',        color: 'info'     },
+  disbursed: { label: 'In progress',       color: 'info'     },
   completed: { label: 'Completed',        color: 'success'  },
   withdrawn: { label: 'Withdrawn',        color: 'error'    },
 };
@@ -325,7 +325,7 @@ const MAINT_STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'all',       label: 'All statuses'     },
   { value: 'requested', label: 'Pending approval' },
   { value: 'approved',  label: 'Approved'         },
-  { value: 'disbursed', label: 'Disbursed'        },
+  { value: 'disbursed', label: 'In progress'      },
   { value: 'completed', label: 'Completed'        },
   { value: 'withdrawn', label: 'Withdrawn'        },
 ];
@@ -475,7 +475,7 @@ function MaintenanceView({
                         {(r.status === 'approved' || r.status === 'disbursed') && (
                           <Button size="small" variant="outlined" color="primary"
                             onClick={() => setDisbTarget(r)}>
-                            Disburse
+                            Record payment
                           </Button>
                         )}
                         {r.status === 'disbursed' && (
@@ -500,7 +500,7 @@ function MaintenanceView({
           onClose={() => setDisbTarget(null)}
           onDisbursed={() => {
             setDisbTarget(null);
-            setSuccessMsg(`Disbursement recorded for "${disbTarget.title}".`);
+            setSuccessMsg(`Payment recorded for "${disbTarget.title}".`);
             setTimeout(() => setSuccessMsg(''), 5000);
           }}
         />
@@ -538,7 +538,7 @@ const SNAG_STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'scheduled', label: 'Scheduled'        },
   { value: 'requested', label: 'Pending approval' },
   { value: 'approved',  label: 'Approved'         },
-  { value: 'disbursed', label: 'Disbursed'        },
+  { value: 'disbursed', label: 'In progress'      },
   { value: 'completed', label: 'Completed'        },
   { value: 'withdrawn', label: 'Withdrawn'        },
 ];
@@ -722,7 +722,7 @@ function SnagView({
                         {isFM && (r.status === 'approved' || r.status === 'disbursed') && (
                           <Button size="small" variant="outlined" color="primary"
                             onClick={() => setDisbTarget(r)}>
-                            Disburse
+                            Record payment
                           </Button>
                         )}
                         {isAdmin && r.status === 'scheduled' && (
@@ -798,7 +798,7 @@ function SnagView({
           request={disbTarget}
           onClose={() => setDisbTarget(null)}
           onDisbursed={() => {
-            setSuccessMsg(`Disbursement recorded for "${disbTarget.title}".`);
+            setSuccessMsg(`Payment recorded for "${disbTarget.title}".`);
             setDisbTarget(null);
             setTimeout(() => setSuccessMsg(''), 5000);
           }}

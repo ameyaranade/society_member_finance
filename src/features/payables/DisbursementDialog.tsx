@@ -93,7 +93,7 @@ export default function DisbursementDialog({ request, onClose, onDisbursed }: Di
       onDisbursed();
       onClose();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Disbursement failed.');
+      setError(e instanceof Error ? e.message : 'Failed to record payment.');
     } finally {
       setSubmitting(false);
     }
@@ -101,7 +101,7 @@ export default function DisbursementDialog({ request, onClose, onDisbursed }: Di
 
   return (
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Record disbursement — {request.title}</DialogTitle>
+      <DialogTitle>Record payment — {request.title}</DialogTitle>
 
       <DialogContent>
         <Stack spacing={0.5} mb={2} mt={1}>
@@ -111,7 +111,7 @@ export default function DisbursementDialog({ request, onClose, onDisbursed }: Di
           </Box>
           {disbursedSoFar > 0 && (
             <Box display="flex" justifyContent="space-between">
-              <Typography variant="body2" color="text.secondary">Already disbursed</Typography>
+              <Typography variant="body2" color="text.secondary">Already paid</Typography>
               <Typography variant="body2">{formatMoney(disbursedSoFar)}</Typography>
             </Box>
           )}
@@ -149,8 +149,8 @@ export default function DisbursementDialog({ request, onClose, onDisbursed }: Di
 
           <TextField select label="Kind" size="small" required value={kind}
             onChange={e => setKind(e.target.value as DisbKind)}>
-            <MenuItem value="partial">Partial disbursement</MenuItem>
-            <MenuItem value="final">Final disbursement</MenuItem>
+            <MenuItem value="partial">Part payment</MenuItem>
+            <MenuItem value="final">Final payment</MenuItem>
           </TextField>
 
           <TextField select label="Payment mode" size="small" required value={mode}
@@ -203,7 +203,7 @@ export default function DisbursementDialog({ request, onClose, onDisbursed }: Di
         <Button onClick={onClose} disabled={submitting}>Cancel</Button>
         <Button variant="contained" disabled={!canSubmit} onClick={handleSubmit}
           startIcon={submitting ? <CircularProgress size={14} color="inherit" /> : undefined}>
-          Record disbursement
+          Record payment
         </Button>
       </DialogActions>
     </Dialog>
