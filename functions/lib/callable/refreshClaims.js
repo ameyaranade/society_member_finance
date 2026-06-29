@@ -27,7 +27,18 @@ exports.refreshClaims = (0, https_1.onCall)(async (request) => {
         photoURL: token.picture ?? undefined,
         lastLoginAt: firestore_1.FieldValue.serverTimestamp(),
     }, { merge: true });
-    // 2. Link invited memberships that match this email → stamp uid + activate
+    // 2. Link invited memberships — but only if the email is verified.
+    //    Google sign-ins are always verified; email/password accounts require
+    //    the user to click the verification link first.
+    const signInProvider = token.firebase?.sign_in_provider;
+    const isEmailPassword = signInProvider === 'password';
+    const emailVerified = token.email_verified === true;
+    if (isEmailPassword && !emailVerified) {
+        // Skip activation until the user verifies their email.
+        // Still return (possibly empty) claims so the client can proceed to the
+        // verify-your-email screen rather than seeing a blank/error state.
+        return (0, claims_1.refreshUserClaims)(uid);
+    }
     console.log(`refreshClaims: uid=${uid} email="${email}"`);
     const invitedSnap = await admin_1.db
         .collection('memberships')

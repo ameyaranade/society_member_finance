@@ -5,6 +5,7 @@ const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const admin_1 = require("../lib/admin");
 const audit_1 = require("../lib/audit");
+const rateLimit_1 = require("../lib/rateLimit");
 const VALID_ROLES = ['admin', 'mc', 'fm', 'resident'];
 /**
  * Admin only (within their society).
@@ -23,6 +24,7 @@ exports.inviteUser = (0, https_1.onCall)(async (request) => {
     if (!isAdmin) {
         throw new https_1.HttpsError('permission-denied', 'Only admins can invite users.');
     }
+    await (0, rateLimit_1.checkRateLimit)(request.auth.uid, 'invite', 20, 60_000);
     if (!input.email?.includes('@')) {
         throw new https_1.HttpsError('invalid-argument', 'Valid email required.');
     }

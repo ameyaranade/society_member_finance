@@ -5,6 +5,7 @@ const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const admin_1 = require("../lib/admin");
 const context_1 = require("../lib/context");
+const audit_1 = require("../lib/audit");
 const transactions_1 = require("../lib/transactions");
 const validate_1 = require("../lib/validate");
 const VALID_SOURCE_TYPES = new Set([
@@ -48,5 +49,20 @@ exports.recordPayment = (0, https_1.onCall)(async (request) => {
         referenceNo: input.referenceNo,
     });
     await txnRef.set(txnData);
+    await (0, audit_1.writeAudit)({
+        societyId,
+        actorUid: uid,
+        actorRole: role,
+        action: 'transaction_recorded',
+        targetType: 'transaction',
+        targetId: txnId,
+        after: {
+            direction: input.direction,
+            amountPaise: input.amountPaise,
+            accountId: input.accountId,
+            fundHead: input.fundHead,
+            sourceType: input.sourceType,
+        },
+    });
     return { txnId };
 });

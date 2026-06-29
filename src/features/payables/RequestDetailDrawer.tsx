@@ -23,6 +23,7 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import Link from '@mui/material/Link';
 import CloseIcon from '@mui/icons-material/Close';
+import DocumentViewerModal from '../../components/DocumentViewerModal';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import AddIcon from '@mui/icons-material/Add';
@@ -119,10 +120,11 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
-// ─── StorageLink — resolves a GCS path to a download URL on mount ────────────
+// ─── StorageLink — resolves a GCS path to a download URL and opens inline viewer ─
 
 function StorageLink({ storagePath }: { storagePath: string }) {
-  const [url, setUrl] = useState<string | null>(null);
+  const [url,        setUrl]        = useState<string | null>(null);
+  const [viewerOpen, setViewerOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -136,19 +138,26 @@ function StorageLink({ storagePath }: { storagePath: string }) {
 
   const fileName = storagePath.split('/').pop() ?? 'document';
   return (
-    <Stack direction="row" alignItems="center" spacing={0.5} mt={0.5}>
-      <AttachFileIcon fontSize="inherit" sx={{ color: 'text.secondary', fontSize: 14 }} />
-      <Link
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        variant="caption"
-        underline="hover"
-        sx={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-      >
-        {fileName}
-      </Link>
-    </Stack>
+    <>
+      <Stack direction="row" alignItems="center" spacing={0.5} mt={0.5}>
+        <AttachFileIcon fontSize="inherit" sx={{ color: 'text.secondary', fontSize: 14 }} />
+        <Link
+          component="button"
+          variant="caption"
+          underline="hover"
+          onClick={() => setViewerOpen(true)}
+          sx={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+        >
+          {fileName}
+        </Link>
+      </Stack>
+      <DocumentViewerModal
+        open={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+        url={url}
+        fileName={fileName}
+      />
+    </>
   );
 }
 

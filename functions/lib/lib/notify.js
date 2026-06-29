@@ -4,6 +4,7 @@ exports.dispatchNotification = dispatchNotification;
 exports.dispatchNotificationSafe = dispatchNotificationSafe;
 const firestore_1 = require("firebase-admin/firestore");
 const admin_1 = require("./admin");
+const email_1 = require("./email");
 /**
  * Write in-app notification docs to /societies/{societyId}/notifications/{id}.
  * Non-critical: callers should .catch() so notification failure never blocks the main operation.
@@ -39,7 +40,28 @@ async function dispatchNotification(params) {
         });
     }
     await batch.commit();
-    // Email stub — transactional email to be implemented in a later phase
+    // Email delivery — real or stub depending on the society's testMode flag.
+    // Fetch testMode once per dispatch call; failures are fire-and-forget.
+    try {
+        const societySnap = await admin_1.db.doc(`societies/${societyId}`).get();
+        const testMode = societySnap.data()?.config?.testMode === true;
+        const emailAdapter = (0, email_1.resolveEmailAdapter)(testMode);
+        // Collect recipient emails from their user profiles
+        const emailSnaps = await Promise.all(recipientUids.map(uid => admin_1.db.doc(`users/${uid}`).get()));
+        const emails = emailSnaps
+            .map(s => s.data()?.email)
+            .filter((e) => !!e && e.includes('@'));
+        if (emails.length > 0) {
+            (0, email_1.sendEmailSafe)(emailAdapter, {
+                to: emails,
+                subject: `[Society] ${type.replace(/_/g, ' ')}`,
+                text: `${payload.title ?? type}\n\n${JSON.stringify(payload)}`,
+            });
+        }
+    }
+    catch (e) {
+        console.error('notify email dispatch error:', e);
+    }
 }
 /**
  * Fire-and-forget wrapper — notification failure must never block the main operation.

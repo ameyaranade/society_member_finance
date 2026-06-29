@@ -16,6 +16,12 @@ exports.seedDashboardData = (0, https_1.onCall)(async (request) => {
     const { societyId } = request.data;
     if (!societyId?.trim())
         throw new https_1.HttpsError('invalid-argument', 'societyId required.');
+    // Seed data is only permitted for societies explicitly marked as test/sandbox.
+    // This prevents accidental seeding of real societies even with a super-admin token.
+    const societySnap = await admin_1.db.doc(`societies/${societyId}`).get();
+    const testMode = societySnap.data()?.config?.testMode === true;
+    if (!testMode)
+        throw new https_1.HttpsError('failed-precondition', 'Seed data can only be written to a test society (config.testMode must be true).');
     // Load accounts and fund heads
     const [accSnap, fhSnap] = await Promise.all([
         admin_1.db.collection(`societies/${societyId}/accounts`).get(),

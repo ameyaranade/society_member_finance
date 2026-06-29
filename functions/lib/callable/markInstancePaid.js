@@ -5,6 +5,7 @@ const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const admin_1 = require("../lib/admin");
 const context_1 = require("../lib/context");
+const audit_1 = require("../lib/audit");
 const transactions_1 = require("../lib/transactions");
 const validate_1 = require("../lib/validate");
 exports.markInstancePaid = (0, https_1.onCall)(async (request) => {
@@ -50,5 +51,20 @@ exports.markInstancePaid = (0, https_1.onCall)(async (request) => {
         paidAt: firestore_1.FieldValue.serverTimestamp(),
     });
     await batch.commit();
+    await (0, audit_1.writeAudit)({
+        societyId,
+        actorUid: uid,
+        actorRole: role,
+        action: 'recurring_instance_paid',
+        targetType: 'recurringInstance',
+        targetId: instanceId,
+        after: {
+            transactionId: txnId,
+            amountPaise: instance.amountPaise,
+            accountId: instance.accountId,
+            fundHead: instance.fundHead,
+            period: instance.period,
+        },
+    });
     return { txnId };
 });
