@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../lib/admin';
 import { writeAudit } from '../lib/audit';
+import { checkRateLimit } from '../lib/rateLimit';
 import type { AuthClaims, Membership, Role } from '../lib/types';
 
 interface InviteUserInput {
@@ -33,6 +34,8 @@ export const inviteUser = onCall(async (request): Promise<{ membershipId: string
     if (!isAdmin) {
       throw new HttpsError('permission-denied', 'Only admins can invite users.');
     }
+
+    await checkRateLimit(request.auth.uid, 'invite', 20, 60_000);
 
     if (!input.email?.includes('@')) {
       throw new HttpsError('invalid-argument', 'Valid email required.');

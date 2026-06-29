@@ -1,5 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { db } from './admin';
+import { resolveEmailAdapter, sendEmailSafe } from './email';
 
 export type NotificationType =
   | 'expense_request_created'
@@ -72,7 +73,31 @@ export async function dispatchNotification(params: DispatchParams): Promise<void
 
   await batch.commit();
 
-  // Email stub — transactional email to be implemented in a later phase
+  // Email delivery — real or stub depending on the society's testMode flag.
+  // Fetch testMode once per dispatch call; failures are fire-and-forget.
+  try {
+    const societySnap = await db.doc(`societies/${societyId}`).get();
+    const testMode = societySnap.data()?.config?.testMode === true;
+    const emailAdapter = resolveEmailAdapter(testMode);
+
+    // Collect recipient emails from their user profiles
+    const emailSnaps = await Promise.all(
+      recipientUids.map(uid => db.doc(`users/${uid}`).get()),
+    );
+    const emails = emailSnaps
+      .map(s => s.data()?.email as string | undefined)
+      .filter((e): e is string => !!e && e.includes('@'));
+
+    if (emails.length > 0) {
+      sendEmailSafe(emailAdapter, {
+        to: emails,
+        subject: `[Society] ${type.replace(/_/g, ' ')}`,
+        text: `${payload.title ?? type}\n\n${JSON.stringify(payload)}`,
+      });
+    }
+  } catch (e) {
+    console.error('notify email dispatch error:', e);
+  }
 }
 
 /**

@@ -18,15 +18,27 @@ const { mockBatch, mockMemberDocs, mockDb } = vi.hoisted(() => {
     doc: vi.fn(() => ({ id: `notif_${notifDocCounter++}` })),
   };
 
+  // doc() is called for: society doc (testMode check) + user profile docs (email lookup)
+  const mockDoc = vi.fn(() => ({
+    get: vi.fn().mockResolvedValue({
+      data: () => ({ config: { testMode: true }, email: 'member@test.com' }),
+    }),
+  }));
+
   const mockDb = {
     collection: vi.fn((path: string) => (path === 'memberships' ? memberChain : notifChain)),
     batch:      vi.fn(() => mockBatch),
+    doc:        mockDoc,
   };
 
   return { mockBatch, mockMemberDocs, memberChain, mockDb };
 });
 
 vi.mock('./admin', () => ({ db: mockDb }));
+vi.mock('./email', () => ({
+  resolveEmailAdapter: vi.fn(() => ({ send: vi.fn().mockResolvedValue(undefined) })),
+  sendEmailSafe: vi.fn(),
+}));
 vi.mock('firebase-admin/app', () => ({ initializeApp: vi.fn() }));
 vi.mock('firebase-admin/firestore', () => ({
   FieldValue: { serverTimestamp: () => 'SERVER_TS' },

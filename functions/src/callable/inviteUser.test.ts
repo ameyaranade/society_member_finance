@@ -18,6 +18,7 @@ const { mockMembershipGet, mockMembershipSet, mockDb } = vi.hoisted(() => {
 
 vi.mock('../lib/admin', () => ({ db: mockDb, adminAuth: {} }));
 vi.mock('../lib/audit', () => ({ writeAudit: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../lib/rateLimit', () => ({ checkRateLimit: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('firebase-admin/app', () => ({ initializeApp: vi.fn() }));
 vi.mock('firebase-admin/firestore', () => ({
   FieldValue: { serverTimestamp: () => 'SERVER_TS', delete: () => 'DELETE' },

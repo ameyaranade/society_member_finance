@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { db } from '../lib/admin';
 import { assertSameSociety, requireCaller } from '../lib/context';
+import { writeAudit } from '../lib/audit';
 import { buildTransaction } from '../lib/transactions';
 import { requireDateString, requirePaymentMode } from '../lib/validate';
 import type { PaymentMode } from '../lib/types';
@@ -60,6 +61,22 @@ export const markInstancePaid = onCall(async (request) => {
       paidAt: FieldValue.serverTimestamp(),
     });
     await batch.commit();
+
+    await writeAudit({
+      societyId,
+      actorUid:   uid,
+      actorRole:  role,
+      action:     'recurring_instance_paid',
+      targetType: 'recurringInstance',
+      targetId:   instanceId,
+      after: {
+        transactionId: txnId,
+        amountPaise:   instance.amountPaise as number,
+        accountId:     instance.accountId as string,
+        fundHead:      instance.fundHead as string,
+        period:        instance.period as string,
+      },
+    });
 
     return { txnId };
   },

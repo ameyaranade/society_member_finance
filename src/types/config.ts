@@ -30,6 +30,8 @@ export interface SocietyConfig {
   billing: { defaultBilledParty: BilledParty };
   approvalTiers: ApprovalTier[];
   chargeModel?: ChargeModel;
+  /** Marks this as a test/sandbox society. Enables seed functions and stubbed email delivery. Never set on a real society. */
+  testMode?: boolean;
 }
 
 export interface UnitContact {

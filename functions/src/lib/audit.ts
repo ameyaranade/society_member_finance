@@ -17,7 +17,10 @@ export type AuditAction =
   | 'expense_request_withdrawn'
   | 'expense_request_disbursed'
   | 'expense_request_completed'
-  | 'snag_scheduled';
+  | 'snag_scheduled'
+  // Ledger / money movement
+  | 'transaction_recorded'
+  | 'recurring_instance_paid';
 
 interface WriteAuditParams {
   societyId: string;

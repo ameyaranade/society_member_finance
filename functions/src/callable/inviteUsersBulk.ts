@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../lib/admin';
 import { writeAudit } from '../lib/audit';
+import { checkRateLimit } from '../lib/rateLimit';
 import type { AuthClaims, Membership, Role } from '../lib/types';
 
 interface BulkInviteRow {
@@ -40,6 +41,8 @@ export const inviteUsersBulk = onCall(async (request): Promise<BulkInviteResult>
   if (!isAdmin) {
     throw new HttpsError('permission-denied', 'Only admins can bulk-invite members.');
   }
+
+  await checkRateLimit(request.auth.uid, 'inviteBulk', 5, 60_000);
 
   if (!Array.isArray(input.rows) || input.rows.length === 0) {
     throw new HttpsError('invalid-argument', 'rows must be a non-empty array.');

@@ -28,6 +28,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: UX invariants check
+        run: npm run check:ux
+
       - name: Typecheck (web)
         run: npm run typecheck
 

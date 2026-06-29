@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { Timestamp } from 'firebase-admin/firestore';
 import { db } from '../lib/admin';
 import { requireCaller } from '../lib/context';
+import { writeAudit } from '../lib/audit';
 import { buildTransaction } from '../lib/transactions';
 import { requirePositivePaise, requireDateString, requirePaymentMode } from '../lib/validate';
 import type { PaymentMode, TransactionSourceType, TransactionDirection } from '../lib/types';
@@ -65,6 +66,23 @@ export const recordPayment = onCall(async (request) => {
     });
 
     await txnRef.set(txnData);
+
+    await writeAudit({
+      societyId,
+      actorUid:   uid,
+      actorRole:  role,
+      action:     'transaction_recorded',
+      targetType: 'transaction',
+      targetId:   txnId,
+      after: {
+        direction:   input.direction,
+        amountPaise: input.amountPaise,
+        accountId:   input.accountId,
+        fundHead:    input.fundHead,
+        sourceType:  input.sourceType,
+      },
+    });
+
     return { txnId };
   },
 );
