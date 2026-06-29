@@ -8,6 +8,7 @@ export type AuditAction =
   | 'role_changed'
   | 'user_deactivated'
   | 'user_reactivated'
+  | 'user_removed'
   // Expense requests
   | 'expense_request_created'
   | 'expense_request_submitted'

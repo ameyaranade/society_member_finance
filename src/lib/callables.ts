@@ -25,10 +25,20 @@ export const callables = {
     { membershipId: string }
   >(functions, 'inviteUser'),
 
+  inviteUsersBulk: httpsCallable<
+    { societyId: string; rows: { email: string; role: Role }[] },
+    { invited: number; errors: { email: string; message: string }[] }
+  >(functions, 'inviteUsersBulk'),
+
   updateMembership: httpsCallable<
     { membershipId: string; role?: Role; status?: 'active' | 'deactivated' },
     { ok: boolean }
   >(functions, 'updateMembership'),
+
+  removeMembership: httpsCallable<
+    { membershipId: string },
+    { ok: true }
+  >(functions, 'removeMembership'),
 
   // ── Expense requests ─────────────────────────────────────────────────────────
   recordApproval: httpsCallable<

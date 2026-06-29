@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Tab from '@mui/material/Tab';
 import Tabs from '@mui/material/Tabs';
@@ -698,7 +699,12 @@ function VendorIncomeTab() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ReceivablesPage() {
-  const [tab, setTab] = useState(0);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const TAB_KEYS = ['collections', 'income'] as const;
+  type ReceivablesTabKey = typeof TAB_KEYS[number];
+  const tabKey = (searchParams.get('tab') ?? 'collections') as ReceivablesTabKey;
+  const tab = Math.max(0, TAB_KEYS.indexOf(tabKey));
+  function setTab(idx: number) { setSearchParams({ tab: TAB_KEYS[idx] }, { replace: true }); }
 
   return (
     <Box>

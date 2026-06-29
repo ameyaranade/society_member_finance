@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Tabs from '@mui/material/Tabs';
@@ -1031,20 +1031,18 @@ function RequestedQueueView({
 export default function PayablesPage() {
   const current = todayPeriod();
   const [period, setPeriod] = useState(current);
-  const [tab, setTab]       = useState(0);
   const { role } = useAuth();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Detail drawer state (S3.28)
-  const [selectedRequest,   setSelectedRequest]   = useState<ExpenseRequest | null>(null);
+  const [selectedRequest,    setSelectedRequest]    = useState<ExpenseRequest | null>(null);
   const [detailTakeUpTarget, setDetailTakeUpTarget] = useState<ExpenseRequest | null>(null);
 
-  useEffect(() => {
-    const t = searchParams.get('tab');
-    if (!t) return;
-    const idx = t === 'maintenance' ? 1 : t === 'snags' ? 2 : t === 'queue' ? 3 : 0;
-    setTab(idx);
-  }, [searchParams]);
+  const TAB_KEYS = ['recurring', 'maintenance', 'snags', 'queue'] as const;
+  type PayablesTabKey = typeof TAB_KEYS[number];
+  const tabKey = (searchParams.get('tab') ?? 'recurring') as PayablesTabKey;
+  const tab = Math.max(0, TAB_KEYS.indexOf(tabKey));
+  function setTab(idx: number) { setSearchParams({ tab: TAB_KEYS[idx] }, { replace: true }); }
 
   const canPay    = role === 'admin' || role === 'fm';
   const canCreate = role === 'admin' || role === 'fm';

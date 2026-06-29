@@ -15,18 +15,26 @@ export type StatusVariant =
   | 'withdrawn'
   | 'overdue'
   | 'info'
-  | 'draft';
+  | 'draft'
+  // membership statuses
+  | 'active'
+  | 'invited'
+  | 'deactivated';
 
 const CONFIG: Record<StatusVariant, { label: string; color: 'success' | 'warning' | 'error' | 'info' | 'default'; icon: React.ReactElement }> = {
-  approved:   { label: 'Approved',   color: 'success', icon: <CheckCircleIcon fontSize="small" /> },
-  completed:  { label: 'Completed',  color: 'success', icon: <CheckCircleIcon fontSize="small" /> },
-  disbursed:  { label: 'In progress', color: 'info',    icon: <InfoOutlinedIcon fontSize="small" /> },
-  requested:  { label: 'Requested',  color: 'warning', icon: <AccessTimeIcon fontSize="small" /> },
-  scheduled:  { label: 'Scheduled',  color: 'default', icon: <FiberManualRecordIcon fontSize="small" /> },
-  withdrawn:  { label: 'Withdrawn',  color: 'default', icon: <BlockIcon fontSize="small" /> },
-  overdue:    { label: 'Overdue',    color: 'error',   icon: <WarningAmberIcon fontSize="small" /> },
-  info:       { label: 'Info',       color: 'info',    icon: <InfoOutlinedIcon fontSize="small" /> },
-  draft:      { label: 'Draft',      color: 'default', icon: <FiberManualRecordIcon fontSize="small" /> },
+  approved:    { label: 'Approved',    color: 'success', icon: <CheckCircleIcon fontSize="small" /> },
+  completed:   { label: 'Completed',   color: 'success', icon: <CheckCircleIcon fontSize="small" /> },
+  disbursed:   { label: 'In progress', color: 'info',    icon: <InfoOutlinedIcon fontSize="small" /> },
+  requested:   { label: 'Requested',   color: 'warning', icon: <AccessTimeIcon fontSize="small" /> },
+  scheduled:   { label: 'Scheduled',   color: 'default', icon: <FiberManualRecordIcon fontSize="small" /> },
+  withdrawn:   { label: 'Withdrawn',   color: 'default', icon: <BlockIcon fontSize="small" /> },
+  overdue:     { label: 'Overdue',     color: 'error',   icon: <WarningAmberIcon fontSize="small" /> },
+  info:        { label: 'Info',        color: 'info',    icon: <InfoOutlinedIcon fontSize="small" /> },
+  draft:       { label: 'Draft',       color: 'default', icon: <FiberManualRecordIcon fontSize="small" /> },
+  // membership
+  active:      { label: 'Active',      color: 'success', icon: <CheckCircleIcon fontSize="small" /> },
+  invited:     { label: 'Invited',     color: 'warning', icon: <AccessTimeIcon fontSize="small" /> },
+  deactivated: { label: 'Deactivated', color: 'default', icon: <BlockIcon fontSize="small" /> },
 };
 
 interface StatusChipProps {

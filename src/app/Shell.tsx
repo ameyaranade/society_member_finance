@@ -26,7 +26,9 @@ import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
-import { signOut } from 'firebase/auth';
+import { signOut, sendEmailVerification } from 'firebase/auth';
+import Alert from '@mui/material/Alert';
+import Button from '@mui/material/Button';
 import { useThemeMode } from '../theme/useThemeMode';
 import { useAuth } from '../features/auth/useAuth';
 import { auth } from '../lib/firebase';
@@ -81,6 +83,20 @@ export default function Shell() {
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
+  const [resendSent, setResendSent] = useState(false);
+
+  const isEmailPassword = user?.providerData[0]?.providerId === 'password';
+  const needsVerification = !!user && isEmailPassword && !user.emailVerified;
+
+  async function handleResendVerification() {
+    if (!user) return;
+    try {
+      await sendEmailVerification(user);
+      setResendSent(true);
+    } catch {
+      // silently ignore rate-limit errors
+    }
+  }
 
   const drawerContent = (
     <Box sx={{ pb: 2 }}>
@@ -180,6 +196,24 @@ export default function Shell() {
           overflowX: 'hidden',
         }}
       >
+        {needsVerification && (
+          <Alert
+            severity="warning"
+            sx={{ mb: 2 }}
+            action={
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => void handleResendVerification()}
+                disabled={resendSent}
+              >
+                {resendSent ? 'Sent!' : 'Resend'}
+              </Button>
+            }
+          >
+            Please verify your email address. Check your inbox for a verification link.
+          </Alert>
+        )}
         <Outlet />
       </Box>
     </Box>

@@ -32,7 +32,20 @@ export const refreshClaims = onCall(async (request): Promise<AuthClaims> => {
       { merge: true },
     );
 
-    // 2. Link invited memberships that match this email → stamp uid + activate
+    // 2. Link invited memberships — but only if the email is verified.
+    //    Google sign-ins are always verified; email/password accounts require
+    //    the user to click the verification link first.
+    const signInProvider = (token as { firebase?: { sign_in_provider?: string } }).firebase?.sign_in_provider;
+    const isEmailPassword = signInProvider === 'password';
+    const emailVerified   = token.email_verified === true;
+
+    if (isEmailPassword && !emailVerified) {
+      // Skip activation until the user verifies their email.
+      // Still return (possibly empty) claims so the client can proceed to the
+      // verify-your-email screen rather than seeing a blank/error state.
+      return refreshUserClaims(uid);
+    }
+
     console.log(`refreshClaims: uid=${uid} email="${email}"`);
     const invitedSnap = await db
       .collection('memberships')

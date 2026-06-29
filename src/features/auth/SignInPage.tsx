@@ -6,6 +6,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   sendPasswordResetEmail,
+  sendEmailVerification,
   type AuthError,
 } from 'firebase/auth';
 import {
@@ -101,6 +102,9 @@ export default function SignInPage() {
       if (displayName.trim()) {
         await updateProfile(cred.user, { displayName: displayName.trim() });
       }
+      await sendEmailVerification(cred.user);
+      setInfo('Account created! Please check your email and click the verification link before signing in.');
+      setMode('signin');
     } catch (err) {
       setError(getErrorMessage(err as AuthError));
     } finally {
